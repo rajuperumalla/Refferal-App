@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { AGENT } from '@/lib/data';
 
 const NAV = [
@@ -14,8 +15,10 @@ const NAV = [
 
 export default function Sidebar() {
   const path = usePathname();
-  return (
-    <aside className="fixed inset-y-0 left-0 w-60 bg-white border-r border-gray-100 flex flex-col z-40 shadow-sm">
+  const [open, setOpen] = useState(false);
+
+  const content = (
+    <>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -46,6 +49,7 @@ export default function Sidebar() {
           const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href));
           return (
             <Link key={item.href} href={item.href}
+              onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${
                 active
                   ? 'bg-blue-50 text-blue-700'
@@ -72,6 +76,37 @@ export default function Sidebar() {
         </div>
         <div className="mt-2 text-[10px] text-gray-400">MediReferral v1.0</div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 bg-white border-r border-gray-100 flex-col z-40 shadow-sm">
+        {content}
+      </aside>
+
+      {/* Mobile hamburger button */}
+      <button
+        className="md:hidden fixed top-4 left-4 z-50 w-9 h-9 bg-white border border-gray-200 rounded-xl flex items-center justify-center shadow-sm"
+        onClick={() => setOpen(o => !o)}
+        aria-label="Toggle menu"
+      >
+        <span className="text-lg">{open ? '✕' : '☰'}</span>
+      </button>
+
+      {/* Mobile drawer overlay */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/30 z-40"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside className={`md:hidden fixed inset-y-0 left-0 w-64 bg-white flex flex-col z-50 shadow-xl transform transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+        {content}
+      </aside>
+    </>
   );
 }

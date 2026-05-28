@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Patient } from '@/lib/types';
+import { AdminPatient } from '@/lib/admin-data';
 import StatusBadge from './StatusBadge';
-import { fmt } from '@/lib/data';
 
-export default function PatientCard({ patient: p }: { patient: Patient }) {
+const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="p-5">
@@ -17,7 +18,7 @@ export default function PatientCard({ patient: p }: { patient: Patient }) {
               <div className="text-sm text-gray-500">{p.phone} · Age {p.age} · {p.gender === 'M' ? 'Male' : 'Female'}</div>
             </div>
           </div>
-          <StatusBadge status={p.status} />
+          <StatusBadge status={p.status as Parameters<typeof StatusBadge>[0]['status']} />
         </div>
 
         <div className="flex gap-2 flex-wrap mb-4">
