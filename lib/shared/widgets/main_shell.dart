@@ -42,56 +42,68 @@ class MainShell extends StatelessWidget {
           ],
         ),
         child: SafeArea(
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: _tabs.asMap().entries.map((e) {
-                final i = e.key;
-                final tab = e.value;
-                final isSelected = currentIndex == i;
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 380;
+              final iconSize = isNarrow ? 22.0 : 24.0;
+              final labelSize = isNarrow ? 9.0 : 10.0;
+              final hPad = isNarrow ? 4.0 : 10.0;
+              return SizedBox(
+                height: 64,
+                child: Row(
+                  children: _tabs.asMap().entries.map((e) {
+                    final i = e.key;
+                    final tab = e.value;
+                    final isSelected = currentIndex == i;
 
-                return GestureDetector(
-                  onTap: () => context.go(tab.path),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary.withOpacity(0.1)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isSelected ? tab.activeIcon : tab.icon,
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textHint,
-                          size: 24,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          tab.label,
-                          style: TextStyle(
-                            fontSize: 10,
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => context.go(tab.path),
+                        behavior: HitTestBehavior.opaque,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: EdgeInsets.symmetric(horizontal: hPad / 2, vertical: 6),
+                          decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.primary
-                                : AppColors.textHint,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
+                                ? AppColors.primary.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSelected ? tab.activeIcon : tab.icon,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.textHint,
+                                size: iconSize,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                tab.label,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: labelSize,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.textHint,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              );
+            },
           ),
         ),
       ),

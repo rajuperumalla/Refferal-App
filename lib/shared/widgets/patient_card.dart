@@ -66,6 +66,8 @@ class PatientCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 patient.name,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 15,
@@ -117,6 +119,8 @@ class PatientCard extends StatelessWidget {
                           ),
                           child: Text(
                             '${patient.specialty} · ${patient.procedure}',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.primary,

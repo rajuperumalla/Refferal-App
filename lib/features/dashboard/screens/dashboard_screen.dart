@@ -184,17 +184,21 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _EarningsChip(
-                      label: 'Total Earned',
-                      value: AppFormatters.compactCurrency(
-                          stats['total_earnings']),
+                    Expanded(
+                      child: _EarningsChip(
+                        label: 'Total Earned',
+                        value: AppFormatters.compactCurrency(
+                            stats['total_earnings']),
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    _EarningsChip(
-                      label: 'Pending',
-                      value:
-                          AppFormatters.currency(stats['pending_commission']),
-                      isWarning: true,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _EarningsChip(
+                        label: 'Pending',
+                        value:
+                            AppFormatters.currency(stats['pending_commission']),
+                        isWarning: true,
+                      ),
                     ),
                   ],
                 ),
@@ -221,7 +225,7 @@ class DashboardScreen extends ConsumerWidget {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.5,
+            childAspectRatio: (MediaQuery.of(context).size.width - 52) / 2 / 130,
             children: [
               StatCard(
                 title: 'Active Patients',
@@ -347,9 +351,12 @@ class _EarningsChip extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             label,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 11,
@@ -357,6 +364,8 @@ class _EarningsChip extends StatelessWidget {
           ),
           Text(
             value,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
             style: TextStyle(
               color: isWarning ? AppColors.accentLight : Colors.white,
               fontWeight: FontWeight.bold,

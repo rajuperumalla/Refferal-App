@@ -104,6 +104,24 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       ),
     );
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    // 6 pins + 5 gaps (4px each) within the padded area (24px each side)
+    final pinSize = ((screenWidth - 48 - 20) / 6).clamp(36.0, 56.0);
+    final pinHeight = pinSize * (60.0 / 56.0);
+
+    final responsivePinTheme = defaultPinTheme.copyWith(
+      width: pinSize,
+      height: pinHeight,
+    );
+    final responsiveFocused = focusedPinTheme.copyWith(
+      width: pinSize,
+      height: pinHeight,
+    );
+    final responsiveSubmitted = submittedPinTheme.copyWith(
+      width: pinSize,
+      height: pinHeight,
+    );
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -171,14 +189,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
               const SizedBox(height: 40),
 
-              // OTP Input
+              // OTP Input — responsive pin size so it never overflows narrow screens
               Center(
                 child: Pinput(
                   controller: _otpController,
                   length: 6,
-                  defaultPinTheme: defaultPinTheme,
-                  focusedPinTheme: focusedPinTheme,
-                  submittedPinTheme: submittedPinTheme,
+                  defaultPinTheme: responsivePinTheme,
+                  focusedPinTheme: responsiveFocused,
+                  submittedPinTheme: responsiveSubmitted,
                   onCompleted: (pin) => _verify(),
                 ),
               ),
