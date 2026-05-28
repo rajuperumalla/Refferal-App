@@ -53,7 +53,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Main Shell with Bottom Nav
       ShellRoute(
-        builder: (context, state, child) => MainShell(child: child),
+        builder: (context, state, child) => MainShell(
+          child: child,
+          location: state.uri.toString(),
+        ),
         routes: [
           GoRoute(
             path: '/home',

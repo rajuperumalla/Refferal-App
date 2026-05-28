@@ -4,8 +4,9 @@ import '../../core/constants/app_colors.dart';
 
 class MainShell extends StatelessWidget {
   final Widget child;
+  final String location;
 
-  const MainShell({super.key, required this.child});
+  const MainShell({super.key, required this.child, required this.location});
 
   static const _tabs = [
     (path: '/home', icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
@@ -15,18 +16,17 @@ class MainShell extends StatelessWidget {
     (path: '/profile', icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
   ];
 
-  int _currentIndex(BuildContext context) {
-    final loc = GoRouterState.of(context).uri.toString();
-    if (loc.startsWith('/patients')) return 1;
-    if (loc.startsWith('/earnings')) return 2;
-    if (loc.startsWith('/notifications')) return 3;
-    if (loc.startsWith('/profile')) return 4;
+  int get _currentIndex {
+    if (location.startsWith('/patients')) return 1;
+    if (location.startsWith('/earnings')) return 2;
+    if (location.startsWith('/notifications')) return 3;
+    if (location.startsWith('/profile')) return 4;
     return 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = _currentIndex(context);
+    final currentIndex = _currentIndex;
 
     return Scaffold(
       body: child,
