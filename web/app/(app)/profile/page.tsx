@@ -93,26 +93,28 @@ export default function ProfilePage() {
 
       {/* Profile hero */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="h-28 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
+        {/* Banner */}
+        <div className="h-24 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, white, transparent)' }} />
         </div>
-        <div className="px-6 pb-6 -mt-12">
-          <div className="flex items-end justify-between">
-            <div className="flex items-end gap-4">
-              <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-white shadow-md">
-                {agent.name[0]}
-              </div>
-              <div className="pb-1">
-                <div className="text-xl font-bold text-gray-900">{agent.name}</div>
-                <div className="text-sm text-gray-500">{agent.email}</div>
-              </div>
+        {/* Avatar row — pulled up to overlap banner */}
+        <div className="px-5 pb-5">
+          {/* Avatar + edit button */}
+          <div className="-mt-10 mb-3 flex items-end justify-between">
+            <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-white shadow-md flex-shrink-0">
+              {agent.name[0]}
             </div>
-            <div className="flex gap-2 pb-1">
-              <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full">ID: {agent.id}</span>
-              <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full">{agent.commissionRate}% Commission</span>
+            <div className="flex flex-wrap justify-end gap-2 mt-12">
+              <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">ID: {agent.id}</span>
+              <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">{agent.commissionRate}% Commission</span>
               {isSuspended && <span className="bg-red-100 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full">Suspended</span>}
               {isPending   && <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-full">Pending</span>}
             </div>
+          </div>
+          {/* Name / email */}
+          <div>
+            <div className="text-xl font-bold text-gray-900">{agent.name}</div>
+            <div className="text-sm text-gray-500 mt-0.5 truncate">{agent.email}</div>
           </div>
         </div>
       </div>
