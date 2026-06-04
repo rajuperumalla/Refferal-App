@@ -106,7 +106,8 @@ type Action =
   | { type: 'SUBMIT_BANK_VERIFICATION'; request: BankVerificationRequest; adminNotif: AdminNotification }
   | { type: 'APPROVE_BANK_VERIFICATION'; id: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'REJECT_BANK_VERIFICATION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
-  | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number };
+  | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
+  | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -120,6 +121,29 @@ function reducer(state: AppState, action: Action): AppState {
         notifications: [action.notification, ...state.notifications],
         activityLog: [action.log, ...state.activityLog],
       };
+
+    case 'UPDATE_PATIENT_STATUS': {
+      let commissions = state.commissions;
+      if (action.newCommission) {
+        commissions = [action.newCommission, ...commissions];
+      }
+      if (action.approveCommissionId !== undefined) {
+        commissions = commissions.map(c =>
+          c.id === action.approveCommissionId && c.status === 'pending_approval'
+            ? { ...c, status: 'approved' as const, approvedAt: today }
+            : c
+        );
+      }
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId ? { ...p, status: action.status } : p
+        ),
+        commissions,
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+    }
 
     case 'APPROVE_COMMISSION':
       return {
@@ -340,6 +364,7 @@ export interface StoreContextType extends AppState {
   approveBankVerification(id: number): void;
   rejectBankVerification(id: number, reason: string): void;
   markAdminNotificationRead(id: number): void;
+  updatePatientStatus(patientId: number, newStatus: string): void;
   adminUnreadCount: number;
 }
 
@@ -596,6 +621,59 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const markAdminNotificationRead = (id: number) => dispatch({ type: 'MARK_ADMIN_NOTIFICATION_READ', id });
 
+  const updatePatientStatus = (patientId: number, newStatus: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    const STATUS_LABELS: Record<string, string> = {
+      new: 'New Lead', contacted: 'Contacted', opd_scheduled: 'OPD Scheduled',
+      ipd_confirmed: 'IPD Confirmed', completed: 'Completed', lost: 'Lost',
+    };
+    const label = STATUS_LABELS[newStatus] ?? newStatus;
+
+    let newCommission: AdminCommission | undefined;
+    let approveCommissionId: number | undefined;
+
+    if (newStatus === 'ipd_confirmed') {
+      // Auto-create commission if one doesn't exist for this patient yet
+      const existing = state.commissions.find(c => c.patientName === patient.name && c.agentId === patient.agentId);
+      if (!existing) {
+        newCommission = {
+          id: Math.max(0, ...state.commissions.map(c => c.id)) + 1,
+          agentId: patient.agentId, agentName: patient.agentName,
+          patientName: patient.name, procedure: patient.procedure,
+          amount: patient.commission, status: 'pending_approval', createdAt: today(),
+        };
+      }
+    }
+
+    if (newStatus === 'completed') {
+      // Auto-approve any pending commission for this patient
+      const pending = state.commissions.find(
+        c => c.patientName === patient.name && c.agentId === patient.agentId && c.status === 'pending_approval'
+      );
+      if (pending) approveCommissionId = pending.id;
+    }
+
+    dispatch({
+      type: 'UPDATE_PATIENT_STATUS',
+      patientId, status: newStatus,
+      newCommission, approveCommissionId,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'patient',
+        title: 'Patient Status Updated',
+        body: `${patient.name}'s case has been updated to "${label}".`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'patient_status_updated',
+        title: 'Patient Status Updated',
+        detail: `${patient.name} (${patient.agentName}) → ${label}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   // ── Computed ──────────────────────────────────────────────────────────────────
 
   const myPatients        = state.patients.filter(p => p.agentId === state.currentAgentId);
@@ -611,7 +689,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, adminUnreadCount,
+      markAdminNotificationRead, updatePatientStatus, adminUnreadCount,
     }}>
       {children}
     </StoreCtx.Provider>

@@ -5,13 +5,32 @@ import { fmtINR } from '@/lib/admin-data';
 import { STATUS_CONFIG } from '@/lib/types';
 
 const STATUSES = ['all','new','contacted','opd_scheduled','ipd_confirmed','completed','lost'] as const;
+type PatientStatus = Exclude<typeof STATUSES[number], 'all'>;
+
+const STATUS_LABELS: Record<string, string> = {
+  all: 'All', new: 'New', contacted: 'Contacted',
+  opd_scheduled: 'OPD Scheduled', ipd_confirmed: 'IPD Confirmed',
+  completed: 'Completed', lost: 'Lost',
+};
+
+// Next valid status transitions
+const STATUS_FLOW: Record<PatientStatus, PatientStatus[]> = {
+  new:           ['contacted', 'lost'],
+  contacted:     ['opd_scheduled', 'lost'],
+  opd_scheduled: ['ipd_confirmed', 'lost'],
+  ipd_confirmed: ['completed', 'lost'],
+  completed:     [],
+  lost:          ['new'],
+};
 
 export default function AdminPatientsPage() {
-  const { patients, agents } = useStore();
+  const { patients, agents, updatePatientStatus } = useStore();
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [agentFilter,  setAgentFilter]  = useState('all');
   const [sort,         setSort]         = useState<'recent' | 'commission' | 'name'>('recent');
+  const [editingId,    setEditingId]    = useState<number | null>(null);
+  const [toast,        setToast]        = useState<string | null>(null);
 
   const activeAgents = agents.filter(a => a.status === 'active');
 
@@ -35,13 +54,30 @@ export default function AdminPatientsPage() {
   const totalCommission = patients.reduce((s, p) => s + p.commission, 0);
   const completedCount  = patients.filter(p => p.status === 'completed').length;
 
-  const statusLabels: Record<string, string> = {
-    all: 'All', new: 'New', contacted: 'Contacted',
-    opd_scheduled: 'OPD', ipd_confirmed: 'IPD', completed: 'Completed', lost: 'Lost',
+  const handleStatusChange = (patientId: number, newStatus: string, patientName: string) => {
+    updatePatientStatus(patientId, newStatus);
+    setEditingId(null);
+    const label = STATUS_LABELS[newStatus] ?? newStatus;
+    const msg = newStatus === 'ipd_confirmed'
+      ? `✅ ${patientName} → IPD Confirmed. Commission queued for approval!`
+      : newStatus === 'completed'
+      ? `🎉 ${patientName} → Completed. Commission auto-approved!`
+      : newStatus === 'lost'
+      ? `❌ ${patientName} marked as Lost.`
+      : `📋 ${patientName} → ${label}`;
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
   };
 
   return (
     <div className="space-y-5">
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-fadeIn">
+          {toast}
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
@@ -85,15 +121,20 @@ export default function AdminPatientsPage() {
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   statusFilter === s ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
                 }`}>
-                {statusLabels[s]} ({count})
+                {STATUS_LABELS[s]} ({count})
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="text-sm text-gray-500">
-        Showing <strong className="text-gray-900">{filtered.length}</strong> of {patients.length} patients
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Showing <strong className="text-gray-900">{filtered.length}</strong> of {patients.length} patients
+        </div>
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span>✏️</span> Click status badge to update
+        </div>
       </div>
 
       {/* Table */}
@@ -112,6 +153,10 @@ export default function AdminPatientsPage() {
                 <tr><td colSpan={9} className="px-5 py-16 text-center text-gray-400"><div className="text-4xl mb-2">🏥</div><div className="font-medium">No patients found</div></td></tr>
               ) : filtered.map(p => {
                 const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG];
+                const nextStatuses = STATUS_FLOW[p.status as PatientStatus] ?? [];
+                const allStatuses = STATUSES.filter(s => s !== 'all') as PatientStatus[];
+                const isEditing = editingId === p.id;
+
                 return (
                   <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-5 py-3.5">
@@ -126,13 +171,48 @@ export default function AdminPatientsPage() {
                     <td className="px-5 py-3.5"><div className="text-xs font-medium text-gray-900">{p.agentName}</div><div className="text-[10px] text-gray-400">{p.agentId}</div></td>
                     <td className="px-5 py-3.5 font-semibold text-emerald-600 text-xs">{fmtINR(p.commission)} <span className="text-gray-400 font-normal">({p.commPct}%)</span></td>
                     <td className="px-5 py-3.5 text-xs font-medium text-gray-700">{fmtINR(p.packageCost)}</td>
+
+                    {/* Interactive status cell */}
                     <td className="px-5 py-3.5">
-                      {cfg && (
-                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}
-                        </span>
+                      {isEditing ? (
+                        <div className="flex flex-col gap-1 min-w-[150px]">
+                          <div className="text-[10px] text-gray-400 mb-0.5">Move to:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {nextStatuses.length === 0 ? (
+                              <span className="text-[10px] text-gray-400 italic">No further transitions</span>
+                            ) : nextStatuses.map(ns => {
+                              const ncfg = STATUS_CONFIG[ns as keyof typeof STATUS_CONFIG];
+                              return (
+                                <button
+                                  key={ns}
+                                  onClick={() => handleStatusChange(p.id, ns, p.name)}
+                                  className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${ncfg?.bg ?? 'bg-gray-100'} ${ncfg?.color ?? 'text-gray-700'} ${ncfg?.border ?? 'border-gray-200'}`}
+                                >
+                                  → {STATUS_LABELS[ns] ?? ns}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button onClick={() => setEditingId(null)} className="text-[10px] text-gray-400 hover:text-gray-600 mt-0.5 text-left">Cancel</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => nextStatuses.length > 0 ? setEditingId(p.id) : undefined}
+                          title={nextStatuses.length > 0 ? 'Click to update status' : 'No further status transitions'}
+                          className={`group flex items-center gap-1.5 transition-opacity ${nextStatuses.length > 0 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                        >
+                          {cfg && (
+                            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}
+                            </span>
+                          )}
+                          {nextStatuses.length > 0 && (
+                            <span className="text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                          )}
+                        </button>
                       )}
                     </td>
+
                     <td className="px-5 py-3.5 text-xs text-gray-400">{p.createdAt}</td>
                   </tr>
                 );

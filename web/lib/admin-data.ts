@@ -77,7 +77,7 @@ export interface AdminHospital {
 
 export interface ActivityLog {
   id: number;
-  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected';
+  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated';
   title: string;
   detail: string;
   time: string;
