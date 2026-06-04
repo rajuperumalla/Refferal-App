@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import {
   AdminAgent, AdminPatient, AdminCommission, AdminHospital, ActivityLog,
   ADMIN_AGENTS, ADMIN_PATIENTS, ADMIN_COMMISSIONS, ADMIN_HOSPITALS,
-  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG,
+  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate,
 } from './admin-data';
 import { Notification } from './types';
 import { NOTIFICATIONS, MONTHLY_EARNINGS } from './data';
@@ -107,7 +107,8 @@ type Action =
   | { type: 'APPROVE_BANK_VERIFICATION'; id: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'REJECT_BANK_VERIFICATION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
-  | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number };
+  | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
+  | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -218,6 +219,28 @@ function reducer(state: AppState, action: Action): AppState {
         agents: state.agents.map(a => a.id === action.id ? { ...a, status: 'active' as const } : a),
         activityLog: [action.log, ...state.activityLog],
       };
+
+    case 'SET_MOP': {
+      const updatedPatients = state.patients.map(p =>
+        p.id === action.patientId
+          ? { ...p, mop: action.mop, ticketSize: action.ticketSize, implantCost: action.implantCost, shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate, mopSetAt: today }
+          : p
+      );
+      const updatedCommissions = action.commissionId
+        ? state.commissions.map(c =>
+            c.id === action.commissionId
+              ? { ...c, amount: action.newCommissionAmount, mop: action.mop, ticketSize: action.ticketSize, implantCost: action.implantCost, shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate }
+              : c
+          )
+        : state.commissions;
+      return {
+        ...state,
+        patients: updatedPatients,
+        commissions: updatedCommissions,
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+    }
 
     case 'ADD_HOSPITAL':
       return { ...state, hospitals: [...state.hospitals, action.hospital] };
@@ -365,6 +388,7 @@ export interface StoreContextType extends AppState {
   rejectBankVerification(id: number, reason: string): void;
   markAdminNotificationRead(id: number): void;
   updatePatientStatus(patientId: number, newStatus: string): void;
+  setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number): void;
   adminUnreadCount: number;
 }
 
@@ -621,6 +645,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const markAdminNotificationRead = (id: number) => dispatch({ type: 'MARK_ADMIN_NOTIFICATION_READ', id });
 
+  const setMOP = (patientId: number, mop: MopType, ticketSize: number, implantCost: number) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+    const shareableAmount = Math.max(0, ticketSize - implantCost);
+    const newCommissionAmount = Math.round(shareableAmount * patient.commPct / 100);
+    const expectedPaymentDate = calcExpectedPaymentDate(mop);
+    const commission = state.commissions.find(c => c.patientName === patient.name && c.agentId === patient.agentId);
+    dispatch({
+      type: 'SET_MOP',
+      patientId, mop, ticketSize, implantCost, shareableAmount, expectedPaymentDate,
+      commissionId: commission?.id,
+      newCommissionAmount,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'commission',
+        title: '💰 Commission Finalised',
+        body: `Your commission for ${patient.name} is finalised at ₹${newCommissionAmount.toLocaleString('en-IN')} (${mop.charAt(0).toUpperCase() + mop.slice(1)}). Expected by ${expectedPaymentDate}.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'mop_set', title: 'MOP & Ticket Size Set',
+        detail: `${patient.name} — ${mop.toUpperCase()}, Ticket ₹${ticketSize.toLocaleString('en-IN')}, Implants ₹${implantCost.toLocaleString('en-IN')}, Share ₹${shareableAmount.toLocaleString('en-IN')}, Commission ₹${newCommissionAmount.toLocaleString('en-IN')}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   const updatePatientStatus = (patientId: number, newStatus: string) => {
     const patient = state.patients.find(p => p.id === patientId);
     if (!patient) return;
@@ -689,7 +739,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, adminUnreadCount,
+      markAdminNotificationRead, updatePatientStatus, setMOP, adminUnreadCount,
     }}>
       {children}
     </StoreCtx.Provider>

@@ -24,6 +24,29 @@ export interface AdminAgent {
   specialties: string[];
 }
 
+export type MopType = 'cash' | 'insurance' | 'reimbursement' | 'loan';
+
+export const MOP_CONFIG: Record<MopType, { label: string; days: number; note: string; color: string; bg: string; border: string; icon: string }> = {
+  cash:          { label: 'Cash',          days: 30, note: 'Paid on 10th of next month', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: '💵' },
+  insurance:     { label: 'Insurance',     days: 45, note: '45-day TPA processing',      color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200',    icon: '🛡️' },
+  reimbursement: { label: 'Reimbursement', days: 45, note: '45-day reimbursement cycle', color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200',  icon: '🔄' },
+  loan:          { label: 'Loan / EMI',    days: 30, note: 'Paid on 10th of next month', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200',   icon: '🏦' },
+};
+
+export function calcExpectedPaymentDate(mop: MopType, fromDateStr?: string): string {
+  const base = fromDateStr ? new Date(fromDateStr) : new Date();
+  let target: Date;
+  if (mop === 'cash' || mop === 'loan') {
+    // 10th of next month
+    target = new Date(base.getFullYear(), base.getMonth() + 1, 10);
+  } else {
+    // 45 days
+    target = new Date(base);
+    target.setDate(target.getDate() + 45);
+  }
+  return target.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export interface AdminPatient {
   id: number;
   name: string;
@@ -41,6 +64,13 @@ export interface AdminPatient {
   agentId: string;
   agentName: string;
   createdAt: string;
+  // MOP fields (set after completion)
+  mop?: MopType;
+  ticketSize?: number;
+  implantCost?: number;
+  shareableAmount?: number;
+  mopSetAt?: string;
+  expectedPaymentDate?: string;
 }
 
 export interface AdminCommission {
@@ -57,6 +87,12 @@ export interface AdminCommission {
   rejectedReason?: string;
   utr?: string;
   method?: string;
+  // MOP / ticket fields
+  mop?: MopType;
+  ticketSize?: number;
+  implantCost?: number;
+  shareableAmount?: number;
+  expectedPaymentDate?: string;
 }
 
 export interface AdminHospital {
@@ -77,7 +113,7 @@ export interface AdminHospital {
 
 export interface ActivityLog {
   id: number;
-  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated';
+  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated' | 'mop_set';
   title: string;
   detail: string;
   time: string;
