@@ -362,6 +362,8 @@ export interface StoreContextType extends AppState {
   myCommissions: AdminCommission[];
   myNotifications: AgentNotification[];
   unreadCount: number;
+  myPendingAmount: number;
+  myApprovedAmount: number;
 
   addPatient(data: {
     name: string; phone: string; age: number; gender: 'M' | 'F';
@@ -731,10 +733,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const myNotifications   = state.notifications.filter(n => n.agentId === state.currentAgentId);
   const unreadCount       = myNotifications.filter(n => !n.read).length;
   const adminUnreadCount  = state.adminNotifications.filter(n => !n.read).length;
+  // Live pending & approved amounts — computed from actual commissions (not static agent field)
+  const myPendingAmount   = myCommissions.filter(c => c.status === 'pending_approval').reduce((s, c) => s + c.amount, 0);
+  const myApprovedAmount  = myCommissions.filter(c => c.status === 'approved').reduce((s, c) => s + c.amount, 0);
 
   return (
     <StoreCtx.Provider value={{
-      ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount,
+      ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount, myPendingAmount, myApprovedAmount,
       addPatient, approveCommission, rejectCommission, markCommissionPaid, approveAllCommissions,
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,

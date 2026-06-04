@@ -7,7 +7,7 @@ const fmt  = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 const fmtL = (n: number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(0)}K` : `₹${n}`;
 
 export default function DashboardPage() {
-  const { currentAgent, myPatients, myNotifications, agentMonthlyEarnings } = useStore();
+  const { currentAgent, myPatients, myNotifications, agentMonthlyEarnings, myPendingAmount, myApprovedAmount } = useStore();
   const agent = currentAgent;
 
   const thisMonth = agentMonthlyEarnings[agentMonthlyEarnings.length - 1]?.amount ?? 0;
@@ -50,7 +50,10 @@ export default function DashboardPage() {
             </div>
             <div className="bg-white/15 rounded-xl px-4 py-3">
               <div className="text-white/60 text-xs mb-1">Pending</div>
-              <div className="text-xl font-bold">{fmt(agent?.pending ?? 0)}</div>
+              <div className="text-xl font-bold">{fmt(myPendingAmount)}</div>
+              {myApprovedAmount > 0 && (
+                <div className="text-[10px] text-emerald-300 mt-0.5">+ {fmt(myApprovedAmount)} approved</div>
+              )}
             </div>
             <div className="bg-white/15 rounded-xl px-4 py-3">
               <div className="text-white/60 text-xs mb-1">Total Leads</div>
