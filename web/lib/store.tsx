@@ -331,7 +331,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   paymentCycle: 'monthly',
   minPayout: 1000,
   minCommission: 3.0,
-  maxCommission: 5.0,
+  maxCommission: 28,
   commissionRates: {
     'Cardiology': 4.0, 'Neurology': 4.0, 'Orthopaedics': 3.75, 'Oncology': 4.5,
     'General Surgery': 4.0, 'Gynecology': 3.5, 'Urology': 3.5, 'ENT': 4.0,

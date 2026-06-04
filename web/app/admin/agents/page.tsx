@@ -87,7 +87,11 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Commission Rate (%)</label>
               <select value={form.commissionRate} onChange={e => set('commissionRate', parseFloat(e.target.value))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                {[3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 5].map(r => <option key={r} value={r}>{r}%</option>)}
+                {[
+                  1, 1.5, 2, 2.5, 3, 3.25, 3.5, 3.75,
+                  4, 4.25, 4.5, 4.75, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5,
+                  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                ].map(r => <option key={r} value={r}>{r}%</option>)}
               </select>
             </div>
             <div>
