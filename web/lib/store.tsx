@@ -229,7 +229,9 @@ function reducer(state: AppState, action: Action): AppState {
         shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate,
       };
       const updatedPatients = state.patients.map(p =>
-        p.id === action.patientId ? { ...p, ...mopFields, mopSetAt: today } : p
+        p.id === action.patientId
+          ? { ...p, ...mopFields, mopSetAt: today, commission: action.newCommissionAmount }
+          : p
       );
       const updatedCommissions = action.commissionId
         ? state.commissions.map(c =>
