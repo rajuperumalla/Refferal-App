@@ -68,6 +68,11 @@ export interface AdminPatient {
   mop?: MopType;
   ticketSize?: number;
   implantCost?: number;
+  pharmacyCost?: number;
+  labCost?: number;
+  discount?: number;
+  otherDeductions?: number;
+  totalDeductions?: number;
   shareableAmount?: number;
   mopSetAt?: string;
   expectedPaymentDate?: string;
@@ -91,6 +96,11 @@ export interface AdminCommission {
   mop?: MopType;
   ticketSize?: number;
   implantCost?: number;
+  pharmacyCost?: number;
+  labCost?: number;
+  discount?: number;
+  otherDeductions?: number;
+  totalDeductions?: number;
   shareableAmount?: number;
   expectedPaymentDate?: string;
 }

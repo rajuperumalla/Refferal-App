@@ -108,7 +108,7 @@ type Action =
   | { type: 'REJECT_BANK_VERIFICATION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
   | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
-  | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog };
+  | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -221,15 +221,20 @@ function reducer(state: AppState, action: Action): AppState {
       };
 
     case 'SET_MOP': {
+      const mopFields = {
+        mop: action.mop, ticketSize: action.ticketSize,
+        implantCost: action.implantCost, pharmacyCost: action.pharmacyCost,
+        labCost: action.labCost, discount: action.discount,
+        otherDeductions: action.otherDeductions, totalDeductions: action.totalDeductions,
+        shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate,
+      };
       const updatedPatients = state.patients.map(p =>
-        p.id === action.patientId
-          ? { ...p, mop: action.mop, ticketSize: action.ticketSize, implantCost: action.implantCost, shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate, mopSetAt: today }
-          : p
+        p.id === action.patientId ? { ...p, ...mopFields, mopSetAt: today } : p
       );
       const updatedCommissions = action.commissionId
         ? state.commissions.map(c =>
             c.id === action.commissionId
-              ? { ...c, amount: action.newCommissionAmount, mop: action.mop, ticketSize: action.ticketSize, implantCost: action.implantCost, shareableAmount: action.shareableAmount, expectedPaymentDate: action.expectedPaymentDate }
+              ? { ...c, amount: action.newCommissionAmount, ...mopFields }
               : c
           )
         : state.commissions;
@@ -390,7 +395,7 @@ export interface StoreContextType extends AppState {
   rejectBankVerification(id: number, reason: string): void;
   markAdminNotificationRead(id: number): void;
   updatePatientStatus(patientId: number, newStatus: string): void;
-  setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number): void;
+  setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
   adminUnreadCount: number;
 }
 
@@ -647,16 +652,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const markAdminNotificationRead = (id: number) => dispatch({ type: 'MARK_ADMIN_NOTIFICATION_READ', id });
 
-  const setMOP = (patientId: number, mop: MopType, ticketSize: number, implantCost: number) => {
+  const setMOP = (patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number) => {
     const patient = state.patients.find(p => p.id === patientId);
     if (!patient) return;
-    const shareableAmount = Math.max(0, ticketSize - implantCost);
+    const totalDeductions  = implantCost + pharmacyCost + labCost + discount + otherDeductions;
+    const shareableAmount  = Math.max(0, ticketSize - totalDeductions);
     const newCommissionAmount = Math.round(shareableAmount * patient.commPct / 100);
     const expectedPaymentDate = calcExpectedPaymentDate(mop);
     const commission = state.commissions.find(c => c.patientName === patient.name && c.agentId === patient.agentId);
     dispatch({
       type: 'SET_MOP',
-      patientId, mop, ticketSize, implantCost, shareableAmount, expectedPaymentDate,
+      patientId, mop, ticketSize,
+      implantCost, pharmacyCost, labCost, discount, otherDeductions, totalDeductions,
+      shareableAmount, expectedPaymentDate,
       commissionId: commission?.id,
       newCommissionAmount,
       notification: {
@@ -667,7 +675,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       },
       log: {
         id: nextLogId(), type: 'mop_set', title: 'MOP & Ticket Size Set',
-        detail: `${patient.name} — ${mop.toUpperCase()}, Ticket ₹${ticketSize.toLocaleString('en-IN')}, Implants ₹${implantCost.toLocaleString('en-IN')}, Share ₹${shareableAmount.toLocaleString('en-IN')}, Commission ₹${newCommissionAmount.toLocaleString('en-IN')}`,
+        detail: `${patient.name} — ${mop.toUpperCase()}, Bill ₹${ticketSize.toLocaleString('en-IN')}, Deductions ₹${totalDeductions.toLocaleString('en-IN')}, Share ₹${shareableAmount.toLocaleString('en-IN')}, Commission ₹${newCommissionAmount.toLocaleString('en-IN')}`,
         time: 'Just now', actor: 'Admin',
       },
     });

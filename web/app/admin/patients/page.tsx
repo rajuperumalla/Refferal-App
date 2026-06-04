@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { fmtINR, MOP_CONFIG, MopType, calcExpectedPaymentDate } from '@/lib/admin-data';
 import { STATUS_CONFIG } from '@/lib/types';
@@ -22,7 +22,20 @@ const STATUS_FLOW: Record<PatientStatus, PatientStatus[]> = {
   lost:          ['new'],
 };
 
-type MopForm = { mop: MopType; ticketSize: number; implantCost: number };
+type MopForm = {
+  mop: MopType;
+  ticketSize: number;
+  implantCost: number;
+  pharmacyCost: number;
+  labCost: number;
+  discount: number;
+  otherDeductions: number;
+};
+
+const EMPTY_FORM: MopForm = {
+  mop: 'cash', ticketSize: 0, implantCost: 0,
+  pharmacyCost: 0, labCost: 0, discount: 0, otherDeductions: 0,
+};
 
 export default function AdminPatientsPage() {
   const { patients, agents, updatePatientStatus, setMOP } = useStore();
@@ -33,7 +46,7 @@ export default function AdminPatientsPage() {
   const [sort,         setSort]         = useState<'recent' | 'commission' | 'name'>('recent');
   const [editingId,    setEditingId]    = useState<number | null>(null);
   const [mopPatientId, setMopPatientId] = useState<number | null>(null);
-  const [mopForm,      setMopForm]      = useState<MopForm>({ mop: 'cash', ticketSize: 0, implantCost: 0 });
+  const [mopForm,      setMopForm]      = useState<MopForm>(EMPTY_FORM);
   const [toast,        setToast]        = useState<string | null>(null);
 
   const activeAgents = agents.filter(a => a.status === 'active');
@@ -67,51 +80,73 @@ export default function AdminPatientsPage() {
   const handleStatusChange = (patientId: number, newStatus: string, patientName: string) => {
     updatePatientStatus(patientId, newStatus);
     setEditingId(null);
-    const label = STATUS_LABELS[newStatus] ?? newStatus;
     const msg = newStatus === 'ipd_confirmed'
       ? `✅ ${patientName} → IPD Confirmed. Commission queued for approval!`
       : newStatus === 'completed'
       ? `🎉 ${patientName} → Completed. Now set MOP & ticket size.`
       : newStatus === 'lost'
       ? `❌ ${patientName} marked as Lost.`
-      : `📋 ${patientName} → ${label}`;
+      : `📋 ${patientName} → ${STATUS_LABELS[newStatus] ?? newStatus}`;
     showToast(msg);
   };
 
   const openMopPanel = (patientId: number) => {
     const p = patients.find(x => x.id === patientId)!;
     setMopForm({
-      mop: p.mop ?? 'cash',
-      ticketSize: p.ticketSize ?? p.packageCost,
-      implantCost: p.implantCost ?? 0,
+      mop:             p.mop            ?? 'cash',
+      ticketSize:      p.ticketSize     ?? p.packageCost,
+      implantCost:     p.implantCost    ?? 0,
+      pharmacyCost:    p.pharmacyCost   ?? 0,
+      labCost:         p.labCost        ?? 0,
+      discount:        p.discount       ?? 0,
+      otherDeductions: p.otherDeductions ?? 0,
     });
     setMopPatientId(patientId);
     setEditingId(null);
   };
 
   const confirmMOP = (patientId: number, patientName: string) => {
-    const { mop, ticketSize, implantCost } = mopForm;
-    setMOP(patientId, mop, ticketSize, implantCost);
+    const { mop, ticketSize, implantCost, pharmacyCost, labCost, discount, otherDeductions } = mopForm;
+    setMOP(patientId, mop, ticketSize, implantCost, pharmacyCost, labCost, discount, otherDeductions);
     setMopPatientId(null);
-    const shareable = Math.max(0, ticketSize - implantCost);
+    const totalDed  = implantCost + pharmacyCost + labCost + discount + otherDeductions;
+    const shareable = Math.max(0, ticketSize - totalDed);
     const patient   = patients.find(p => p.id === patientId)!;
     const comm      = Math.round(shareable * patient.commPct / 100);
     const cfg       = MOP_CONFIG[mop];
-    showToast(`💳 MOP set for ${patientName} — ${cfg.icon} ${cfg.label} · ₹${comm.toLocaleString('en-IN')} commission · Due ${calcExpectedPaymentDate(mop)}`);
+    showToast(`💳 MOP set — ${cfg.icon} ${cfg.label} · Net ₹${shareable.toLocaleString('en-IN')} · Commission ₹${comm.toLocaleString('en-IN')} · Due ${calcExpectedPaymentDate(mop)}`);
   };
 
-  // Live preview calculations while MOP panel is open
-  const previewShareable = Math.max(0, mopForm.ticketSize - mopForm.implantCost);
+  // Live preview while MOP panel is open
+  const totalDed        = mopForm.implantCost + mopForm.pharmacyCost + mopForm.labCost + mopForm.discount + mopForm.otherDeductions;
+  const previewShareable = Math.max(0, mopForm.ticketSize - totalDed);
   const mopPatient       = mopPatientId ? patients.find(p => p.id === mopPatientId) : null;
   const previewComm      = mopPatient ? Math.round(previewShareable * mopPatient.commPct / 100) : 0;
   const previewDate      = calcExpectedPaymentDate(mopForm.mop);
+
+  // Input helper
+  const numInput = (field: keyof MopForm, label: string, hint: string, borderColor: string) => (
+    <div>
+      <label className="text-xs font-semibold text-gray-600 block mb-1">
+        {label}
+        <span className="ml-1 font-normal text-gray-400 text-[11px]">— {hint}</span>
+      </label>
+      <input
+        type="number" min={0}
+        value={(mopForm[field] as number) === 0 ? '' : (mopForm[field] as number)}
+        placeholder="0"
+        onChange={e => setMopForm(f => ({ ...f, [field]: Number(e.target.value) || 0 }))}
+        className={`w-40 border-2 ${borderColor} rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white focus:ring-0 transition-colors`}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-5">
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-2xl">
           {toast}
         </div>
       )}
@@ -119,11 +154,11 @@ export default function AdminPatientsPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
-          { label: 'Total Patients',     value: patients.length,                                                         color: 'text-gray-900' },
-          { label: 'Completed Cases',    value: completedCount,                                                          color: 'text-emerald-600' },
-          { label: 'Active Pipeline',    value: patients.filter(p => !['completed','lost'].includes(p.status)).length,  color: 'text-blue-600' },
-          { label: 'Commission Pool',    value: fmtINR(totalCommission),                                                 color: 'text-indigo-600' },
-          { label: 'MOP Pending',        value: mopPending,                                                              color: mopPending > 0 ? 'text-orange-600' : 'text-gray-400' },
+          { label: 'Total Patients',  value: patients.length,                                                          color: 'text-gray-900' },
+          { label: 'Completed Cases', value: completedCount,                                                           color: 'text-emerald-600' },
+          { label: 'Active Pipeline', value: patients.filter(p => !['completed','lost'].includes(p.status)).length,   color: 'text-blue-600' },
+          { label: 'Commission Pool', value: fmtINR(totalCommission),                                                  color: 'text-indigo-600' },
+          { label: 'MOP Pending',     value: mopPending,                                                               color: mopPending > 0 ? 'text-orange-600' : 'text-gray-400' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
@@ -211,12 +246,11 @@ export default function AdminPatientsPage() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-5 py-16 text-center text-gray-400"><div className="text-4xl mb-2">🏥</div><div className="font-medium">No patients found</div></td></tr>
               ) : filtered.map(p => {
-                const cfg         = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG];
+                const cfg          = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG];
                 const nextStatuses = STATUS_FLOW[p.status as PatientStatus] ?? [];
-                const isEditing   = editingId === p.id;
-                const isMopOpen   = mopPatientId === p.id;
-                const mopCfg      = p.mop ? MOP_CONFIG[p.mop] : null;
-                const needsMOP    = p.status === 'completed' && !p.mop;
+                const isEditing    = editingId === p.id;
+                const isMopOpen    = mopPatientId === p.id;
+                const mopCfg       = p.mop ? MOP_CONFIG[p.mop] : null;
 
                 return (
                   <>
@@ -257,28 +291,23 @@ export default function AdminPatientsPage() {
                         <div className="text-[10px] text-gray-400">{p.commPct}% rate</div>
                       </td>
 
-                      {/* Ticket / MOP column */}
-                      <td className="px-5 py-3.5 min-w-[160px]">
+                      {/* Ticket / MOP */}
+                      <td className="px-5 py-3.5 min-w-[170px]">
                         {p.status === 'completed' ? (
                           mopCfg ? (
-                            /* MOP already set — show summary */
                             <div className="space-y-1">
                               <div className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${mopCfg.bg} ${mopCfg.color} ${mopCfg.border}`}>
                                 {mopCfg.icon} {mopCfg.label}
                               </div>
-                              <div className="text-[10px] text-gray-500">Ticket: {fmtINR(p.ticketSize!)}</div>
-                              {(p.implantCost ?? 0) > 0 && (
-                                <div className="text-[10px] text-red-500">− Implants: {fmtINR(p.implantCost!)}</div>
+                              <div className="text-[10px] text-gray-500">Bill: {fmtINR(p.ticketSize!)}</div>
+                              {(p.totalDeductions ?? 0) > 0 && (
+                                <div className="text-[10px] text-red-500">− Deductions: {fmtINR(p.totalDeductions!)}</div>
                               )}
                               <div className="text-[10px] font-semibold text-indigo-600">Share: {fmtINR(p.shareableAmount!)}</div>
                               <div className="text-[10px] text-gray-400">Due: {p.expectedPaymentDate}</div>
-                              <button onClick={() => openMopPanel(p.id)}
-                                className="text-[10px] text-indigo-500 hover:text-indigo-700 underline mt-0.5">
-                                Edit MOP
-                              </button>
+                              <button onClick={() => openMopPanel(p.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 underline">Edit MOP</button>
                             </div>
                           ) : (
-                            /* MOP not yet set */
                             <button onClick={() => openMopPanel(p.id)}
                               className="flex items-center gap-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg transition-colors shadow-sm whitespace-nowrap">
                               💳 Set MOP
@@ -311,7 +340,6 @@ export default function AdminPatientsPage() {
                           </div>
                         ) : (
                           <button onClick={() => nextStatuses.length > 0 ? setEditingId(p.id) : undefined}
-                            title={nextStatuses.length > 0 ? 'Click to update status' : undefined}
                             className={`group flex items-center gap-1.5 ${nextStatuses.length > 0 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>
                             {cfg && (
                               <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
@@ -329,124 +357,231 @@ export default function AdminPatientsPage() {
                       <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">{p.createdAt}</td>
                     </tr>
 
-                    {/* ── MOP Panel ── inline expansion row */}
+                    {/* ── MOP Expansion Panel ─────────────────────────────────── */}
                     {isMopOpen && (
                       <tr key={`mop-${p.id}`}>
-                        <td colSpan={9} className="px-6 py-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/50 border-b border-blue-100">
+                        <td colSpan={9} className="px-6 py-5 bg-gradient-to-r from-slate-50 to-blue-50/40 border-b border-blue-100">
+                          <div className="space-y-5">
 
-                          <div className="flex flex-wrap gap-6 items-start">
-
-                            {/* Header */}
-                            <div className="w-full flex items-center gap-3 mb-1">
-                              <span className="text-lg">💳</span>
+                            {/* Panel header */}
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-lg flex-shrink-0">💳</div>
                               <div>
-                                <div className="text-sm font-bold text-gray-900">Set Mode of Payment & Ticket Size — <span className="text-blue-600">{p.name}</span></div>
-                                <div className="text-xs text-gray-500">{p.specialty} · {p.procedure} · Agent: {p.agentName} ({p.commPct}% commission rate)</div>
+                                <div className="text-sm font-bold text-gray-900">
+                                  Mode of Payment & Bill Breakdown — <span className="text-indigo-600">{p.name}</span>
+                                </div>
+                                <div className="text-xs text-gray-500">{p.specialty} · {p.procedure} · Agent: {p.agentName} · Rate: {p.commPct}%</div>
                               </div>
-                              <button onClick={() => setMopPatientId(null)} className="ml-auto text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                              <button onClick={() => setMopPatientId(null)} className="ml-auto text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
                             </div>
 
-                            {/* MOP selector */}
-                            <div className="flex-shrink-0">
-                              <div className="text-xs font-semibold text-gray-600 mb-2">Mode of Payment</div>
-                              <div className="flex flex-wrap gap-2">
-                                {(Object.keys(MOP_CONFIG) as MopType[]).map(m => {
-                                  const mc = MOP_CONFIG[m];
-                                  const active = mopForm.mop === m;
-                                  return (
-                                    <button key={m} onClick={() => setMopForm(f => ({ ...f, mop: m }))}
-                                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
-                                        active
-                                          ? `${mc.bg} ${mc.color} ${mc.border} shadow-sm scale-[1.03]`
-                                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                                      }`}>
-                                      <span>{mc.icon}</span>
-                                      <div className="text-left">
-                                        <div>{mc.label}</div>
-                                        <div className={`text-[10px] font-normal ${active ? 'opacity-80' : 'text-gray-400'}`}>{mc.note}</div>
+                            <div className="flex flex-wrap gap-6">
+
+                              {/* Left column: MOP + inputs */}
+                              <div className="flex-1 min-w-0 space-y-4">
+
+                                {/* MOP selector */}
+                                <div>
+                                  <div className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Mode of Payment</div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(Object.keys(MOP_CONFIG) as MopType[]).map(m => {
+                                      const mc = MOP_CONFIG[m];
+                                      const active = mopForm.mop === m;
+                                      return (
+                                        <button key={m} onClick={() => setMopForm(f => ({ ...f, mop: m }))}
+                                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                                            active
+                                              ? `${mc.bg} ${mc.color} ${mc.border} shadow-sm scale-[1.02]`
+                                              : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                          }`}>
+                                          <span className="text-base">{mc.icon}</span>
+                                          <div className="text-left">
+                                            <div>{mc.label}</div>
+                                            <div className={`text-[10px] font-normal ${active ? 'opacity-70' : 'text-gray-400'}`}>{mc.note}</div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Bill inputs — grid layout */}
+                                <div>
+                                  <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wide">Bill Components</div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+
+                                    {/* Total Bill — highlighted */}
+                                    <div className="col-span-2 sm:col-span-1">
+                                      <label className="text-xs font-bold text-gray-800 block mb-1">
+                                        Total Bill Amount (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-blue-500">admin editable</span>
+                                      </label>
+                                      <input
+                                        type="number" min={0}
+                                        value={mopForm.ticketSize === 0 ? '' : mopForm.ticketSize}
+                                        placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, ticketSize: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-indigo-300 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    {/* Deductions */}
+                                    <div>
+                                      <label className="text-xs font-semibold text-gray-600 block mb-1">
+                                        Implants / Equipment (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-red-400">excluded</span>
+                                      </label>
+                                      <input type="number" min={0}
+                                        value={mopForm.implantCost === 0 ? '' : mopForm.implantCost} placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, implantCost: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-red-200 focus:border-red-400 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="text-xs font-semibold text-gray-600 block mb-1">
+                                        Pharmacy / Medicines (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-red-400">excluded</span>
+                                      </label>
+                                      <input type="number" min={0}
+                                        value={mopForm.pharmacyCost === 0 ? '' : mopForm.pharmacyCost} placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, pharmacyCost: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-red-200 focus:border-red-400 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="text-xs font-semibold text-gray-600 block mb-1">
+                                        Lab & Diagnostics (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-red-400">excluded</span>
+                                      </label>
+                                      <input type="number" min={0}
+                                        value={mopForm.labCost === 0 ? '' : mopForm.labCost} placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, labCost: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-red-200 focus:border-red-400 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="text-xs font-semibold text-gray-600 block mb-1">
+                                        Hospital Discount (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-amber-500">deducted</span>
+                                      </label>
+                                      <input type="number" min={0}
+                                        value={mopForm.discount === 0 ? '' : mopForm.discount} placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, discount: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-amber-200 focus:border-amber-400 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="text-xs font-semibold text-gray-600 block mb-1">
+                                        Other Deductions (₹)
+                                        <span className="ml-1 text-[10px] font-normal text-gray-400">misc.</span>
+                                      </label>
+                                      <input type="number" min={0}
+                                        value={mopForm.otherDeductions === 0 ? '' : mopForm.otherDeductions} placeholder="0"
+                                        onChange={e => setMopForm(f => ({ ...f, otherDeductions: Number(e.target.value) || 0 }))}
+                                        className="w-full border-2 border-gray-200 focus:border-gray-400 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none bg-white"
+                                      />
+                                    </div>
+
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right column: live preview */}
+                              <div className="w-72 flex-shrink-0">
+                                <div className="bg-white border border-indigo-100 rounded-2xl shadow-sm overflow-hidden">
+                                  <div className="bg-indigo-600 px-4 py-3">
+                                    <div className="text-white text-xs font-bold uppercase tracking-wide">📊 Commission Preview</div>
+                                  </div>
+                                  <div className="p-4 space-y-2 text-xs">
+
+                                    {/* Bill breakdown */}
+                                    <div className="flex justify-between py-1">
+                                      <span className="text-gray-500">Total Bill</span>
+                                      <span className="font-bold text-gray-900">{fmtINR(mopForm.ticketSize)}</span>
+                                    </div>
+
+                                    {mopForm.implantCost > 0 && (
+                                      <div className="flex justify-between text-red-600">
+                                        <span>− Implants / Equipment</span>
+                                        <span className="font-semibold">− {fmtINR(mopForm.implantCost)}</span>
                                       </div>
+                                    )}
+                                    {mopForm.pharmacyCost > 0 && (
+                                      <div className="flex justify-between text-red-600">
+                                        <span>− Pharmacy / Medicines</span>
+                                        <span className="font-semibold">− {fmtINR(mopForm.pharmacyCost)}</span>
+                                      </div>
+                                    )}
+                                    {mopForm.labCost > 0 && (
+                                      <div className="flex justify-between text-red-600">
+                                        <span>− Lab & Diagnostics</span>
+                                        <span className="font-semibold">− {fmtINR(mopForm.labCost)}</span>
+                                      </div>
+                                    )}
+                                    {mopForm.discount > 0 && (
+                                      <div className="flex justify-between text-amber-600">
+                                        <span>− Hospital Discount</span>
+                                        <span className="font-semibold">− {fmtINR(mopForm.discount)}</span>
+                                      </div>
+                                    )}
+                                    {mopForm.otherDeductions > 0 && (
+                                      <div className="flex justify-between text-gray-500">
+                                        <span>− Other Deductions</span>
+                                        <span className="font-semibold">− {fmtINR(mopForm.otherDeductions)}</span>
+                                      </div>
+                                    )}
+
+                                    {totalDed > 0 && (
+                                      <div className="flex justify-between border-t border-dashed border-red-100 pt-2 text-red-600">
+                                        <span className="font-medium">Total Deductions</span>
+                                        <span className="font-bold">− {fmtINR(totalDed)}</span>
+                                      </div>
+                                    )}
+
+                                    <div className="flex justify-between border-t-2 border-indigo-100 pt-2">
+                                      <span className="font-bold text-gray-800">Shareable Amount</span>
+                                      <span className="font-bold text-indigo-700 text-sm">{fmtINR(previewShareable)}</span>
+                                    </div>
+
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">Agent Rate</span>
+                                      <span className="font-semibold">{mopPatient?.commPct ?? 0}%</span>
+                                    </div>
+
+                                    <div className="flex justify-between border-t border-gray-100 pt-2">
+                                      <span className="font-bold text-gray-900 text-sm">Agent Commission</span>
+                                      <span className="font-bold text-emerald-600 text-lg">{fmtINR(previewComm)}</span>
+                                    </div>
+
+                                    {/* Payment timeline */}
+                                    <div className={`flex items-center gap-2 mt-3 p-3 rounded-xl border ${MOP_CONFIG[mopForm.mop].bg} ${MOP_CONFIG[mopForm.mop].border}`}>
+                                      <span className="text-base">{MOP_CONFIG[mopForm.mop].icon}</span>
+                                      <div>
+                                        <div className={`text-xs font-bold ${MOP_CONFIG[mopForm.mop].color}`}>Due by {previewDate}</div>
+                                        <div className="text-[10px] text-gray-400">{MOP_CONFIG[mopForm.mop].note}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Action buttons */}
+                                  <div className="px-4 pb-4 space-y-2">
+                                    <button onClick={() => confirmMOP(p.id, p.name)}
+                                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors shadow-sm">
+                                      ✓ Confirm MOP
                                     </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Ticket inputs */}
-                            <div className="flex gap-4 flex-wrap">
-                              <div>
-                                <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                  Total Bill / Ticket Size (₹)
-                                  <span className="ml-1 font-normal text-gray-400">— Admin editable</span>
-                                </label>
-                                <input
-                                  type="number" min={0}
-                                  value={mopForm.ticketSize}
-                                  onChange={e => setMopForm(f => ({ ...f, ticketSize: Number(e.target.value) }))}
-                                  className="w-44 border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:border-indigo-500 bg-white"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs font-semibold text-gray-600 block mb-1">
-                                  Implant / Equipment Cost (₹)
-                                  <span className="ml-1 font-normal text-gray-400">— excluded from share</span>
-                                </label>
-                                <input
-                                  type="number" min={0}
-                                  value={mopForm.implantCost}
-                                  onChange={e => setMopForm(f => ({ ...f, implantCost: Number(e.target.value) }))}
-                                  className="w-44 border-2 border-red-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:border-red-400 bg-white"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Live preview box */}
-                            <div className="bg-white border border-indigo-100 rounded-2xl p-4 min-w-[260px] shadow-sm">
-                              <div className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-1.5">📊 Commission Preview</div>
-                              <div className="space-y-2 text-xs">
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Total Ticket</span>
-                                  <span className="font-semibold text-gray-900">{fmtINR(mopForm.ticketSize)}</span>
-                                </div>
-                                {mopForm.implantCost > 0 && (
-                                  <div className="flex justify-between text-red-600">
-                                    <span>− Implants / Equipment</span>
-                                    <span className="font-semibold">− {fmtINR(mopForm.implantCost)}</span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between border-t border-dashed border-gray-200 pt-2">
-                                  <span className="text-gray-700 font-medium">Shareable Amount</span>
-                                  <span className="font-bold text-indigo-700">{fmtINR(previewShareable)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Agent Rate</span>
-                                  <span className="font-semibold">{p.commPct}%</span>
-                                </div>
-                                <div className="flex justify-between border-t border-gray-200 pt-2">
-                                  <span className="font-bold text-gray-900">Agent Commission</span>
-                                  <span className="font-bold text-emerald-600 text-sm">{fmtINR(previewComm)}</span>
-                                </div>
-                                <div className={`flex items-center gap-2 mt-2 px-3 py-2 rounded-xl border ${MOP_CONFIG[mopForm.mop].bg} ${MOP_CONFIG[mopForm.mop].border}`}>
-                                  <span>{MOP_CONFIG[mopForm.mop].icon}</span>
-                                  <div>
-                                    <div className={`text-xs font-semibold ${MOP_CONFIG[mopForm.mop].color}`}>Expected by {previewDate}</div>
-                                    <div className="text-[10px] text-gray-400">{MOP_CONFIG[mopForm.mop].note}</div>
+                                    <button onClick={() => setMopPatientId(null)}
+                                      className="w-full py-2 text-gray-400 hover:text-gray-600 text-xs">
+                                      Cancel
+                                    </button>
                                   </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Confirm button */}
-                            <div className="flex flex-col justify-end gap-2 self-end">
-                              <button onClick={() => confirmMOP(p.id, p.name)}
-                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm whitespace-nowrap">
-                                ✓ Confirm MOP
-                              </button>
-                              <button onClick={() => setMopPatientId(null)}
-                                className="px-5 py-2 text-gray-500 hover:text-gray-700 text-xs text-center">
-                                Cancel
-                              </button>
                             </div>
-
                           </div>
                         </td>
                       </tr>
