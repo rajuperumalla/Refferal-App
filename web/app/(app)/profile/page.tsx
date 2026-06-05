@@ -12,19 +12,90 @@ const VERIFICATION_BADGE: Record<BankDetails['verificationStatus'], { label: str
   rejected:   { label: '❌ Rejected — Resubmit',  bg: 'bg-red-50',    color: 'text-red-700' },
 };
 
-// ── OTP helpers ───────────────────────────────────────────────────────────────
-const genOTP = () => String(Math.floor(100000 + Math.random() * 900000));
-const OTP_TTL = 5 * 60; // 5 minutes in seconds
-const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+// ── OTP + KYC helpers ─────────────────────────────────────────────────────────
+const genOTP      = () => String(Math.floor(100000 + Math.random() * 900000));
+const OTP_TTL     = 5 * 60;
+const isValidEmail  = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const isValidAadhaar = (v: string) => /^\d{12}$/.test(v.replace(/\s/g, ''));
+const isValidPAN     = (v: string) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v.trim().toUpperCase());
 
 export default function ProfilePage() {
-  const { currentAgent, bankDetails, updateBankDetails, submitBankVerification, verifyEmail } = useStore();
+  const { currentAgent, bankDetails, updateBankDetails, submitBankVerification, verifyEmail, verifyPhone, submitKYC } = useStore();
   const agent = currentAgent;
 
   const [notifs,      setNotifs]      = useState(true);
   const [biometric,   setBiometric]   = useState(false);
   const [darkMode,    setDarkMode]    = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(true);
+
+  // ── Phone OTP state ─────────────────────────────────────────────────────────
+  const [phoneOtpSent,    setPhoneOtpSent]    = useState(false);
+  const [phoneOtpCode,    setPhoneOtpCode]    = useState('');
+  const [phoneOtpInput,   setPhoneOtpInput]   = useState('');
+  const [phoneOtpError,   setPhoneOtpError]   = useState('');
+  const [phoneCountdown,  setPhoneCountdown]  = useState(0);
+  const [phoneResendWait, setPhoneResendWait] = useState(0);
+  const phoneCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (phoneCountdown <= 0) return;
+    phoneCountdownRef.current = setInterval(() => {
+      setPhoneCountdown(c => { if (c <= 1) { clearInterval(phoneCountdownRef.current!); return 0; } return c - 1; });
+      setPhoneResendWait(r => Math.max(0, r - 1));
+    }, 1000);
+    return () => clearInterval(phoneCountdownRef.current!);
+  }, [phoneOtpSent]);
+
+  const handleSendPhoneOTP = () => {
+    const code = genOTP();
+    setPhoneOtpCode(code);
+    setPhoneOtpInput('');
+    setPhoneOtpError('');
+    setPhoneOtpSent(true);
+    setPhoneCountdown(OTP_TTL);
+    setPhoneResendWait(30);
+  };
+
+  const handleVerifyPhoneOTP = () => {
+    if (phoneCountdown <= 0) { setPhoneOtpError('OTP expired. Request a new one.'); return; }
+    if (phoneOtpInput.trim() === phoneOtpCode) {
+      verifyPhone(agent!.id);
+      setPhoneOtpSent(false);
+      clearInterval(phoneCountdownRef.current!);
+    } else {
+      setPhoneOtpError('Incorrect OTP. Please try again.');
+    }
+  };
+
+  // ── KYC state ────────────────────────────────────────────────────────────────
+  const [kycForm, setKycForm] = useState({
+    aadhaar: '', pan: '', aadhaarDoc: '', panDoc: '', profilePhoto: '',
+  });
+  const [kycErrors, setKycErrors] = useState<Record<string, string>>({});
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const aadhaarFileRef = useRef<HTMLInputElement>(null);
+  const panFileRef     = useRef<HTMLInputElement>(null);
+  const photoFileRef   = useRef<HTMLInputElement>(null);
+
+  const handleKycFile = (field: 'aadhaarDoc' | 'panDoc' | 'profilePhoto', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setKycForm(f => ({ ...f, [field]: file.name }));
+  };
+
+  const handleSubmitKYC = () => {
+    const errs: Record<string, string> = {};
+    if (!isValidAadhaar(kycForm.aadhaar)) errs.aadhaar = 'Enter a valid 12-digit Aadhaar number';
+    if (!isValidPAN(kycForm.pan))         errs.pan     = 'Enter a valid PAN (e.g. ABCDE1234F)';
+    if (!kycForm.aadhaarDoc)              errs.aadhaarDoc = 'Upload Aadhaar card document';
+    if (!kycForm.panDoc)                  errs.panDoc     = 'Upload PAN card document';
+    setKycErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    setKycSubmitting(true);
+    setTimeout(() => {
+      submitKYC(agent!.id, kycForm.aadhaar.replace(/\s/g, ''), kycForm.pan.toUpperCase(), kycForm.aadhaarDoc, kycForm.panDoc, kycForm.profilePhoto || undefined);
+      setKycSubmitting(false);
+    }, 800);
+  };
 
   // ── Email OTP state ─────────────────────────────────────────────────────────
   const [emailInput,   setEmailInput]   = useState(agent?.email ?? '');
@@ -239,6 +310,81 @@ export default function ProfilePage() {
 
         <div className="space-y-5">
 
+          {/* ── Phone OTP Verification card ──────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="font-semibold text-gray-900 mb-4">📱 Phone Verification</div>
+
+            {agent.phoneVerified ? (
+              <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                <span className="text-2xl">✅</span>
+                <div>
+                  <div className="text-sm font-semibold text-emerald-800">{agent.phone}</div>
+                  <div className="text-xs text-emerald-600 mt-0.5">Phone number verified</div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Unverified notice */}
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                  <span>⚠️</span>
+                  <div className="flex-1">
+                    <div className="text-xs font-semibold text-amber-800">Phone not verified</div>
+                    <div className="text-xs text-amber-600">{agent.phone}</div>
+                  </div>
+                  {!phoneOtpSent && (
+                    <button onClick={handleSendPhoneOTP}
+                      className="text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg whitespace-nowrap">
+                      Verify now
+                    </button>
+                  )}
+                </div>
+
+                {phoneOtpSent && (
+                  <div className="space-y-3">
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-base mt-0.5">📨</span>
+                        <div className="flex-1">
+                          <div className="text-xs font-semibold text-blue-800">OTP sent to {agent.phone}</div>
+                          <div className="text-xs text-blue-600 mt-0.5">Valid for {fmtCountdown(phoneCountdown)}</div>
+                        </div>
+                        <span className={`text-xs font-bold tabular-nums ${phoneCountdown < 60 ? 'text-red-500' : 'text-blue-600'}`}>
+                          {fmtCountdown(phoneCountdown)}
+                        </span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-blue-100 flex items-center gap-2">
+                        <span className="text-[10px] text-blue-400">🔬 Demo OTP:</span>
+                        <code className="text-sm font-bold font-mono tracking-[0.25em] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-lg select-all">{phoneOtpCode}</code>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">Enter 6-digit OTP</label>
+                      <div className="flex gap-2">
+                        <input type="text" inputMode="numeric" maxLength={6} value={phoneOtpInput}
+                          onChange={e => { setPhoneOtpInput(e.target.value.replace(/\D/g, '')); setPhoneOtpError(''); }}
+                          placeholder="• • • • • •"
+                          className={`flex-1 border-2 rounded-xl px-4 py-2.5 text-center text-lg font-bold font-mono tracking-[0.5em] focus:outline-none transition-colors ${phoneOtpError ? 'border-red-400 bg-red-50/30' : 'border-blue-200 focus:border-blue-500'}`} />
+                        <button onClick={handleVerifyPhoneOTP}
+                          disabled={phoneOtpInput.length !== 6 || phoneCountdown <= 0}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl whitespace-nowrap">
+                          ✓ Verify
+                        </button>
+                      </div>
+                      {phoneOtpError && <p className="text-xs text-red-500 mt-1.5">⚠ {phoneOtpError}</p>}
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      {phoneResendWait > 0 ? (
+                        <span className="text-gray-400">Resend in {phoneResendWait}s</span>
+                      ) : (
+                        <button onClick={handleSendPhoneOTP} className="text-blue-600 hover:underline font-medium">Resend OTP</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* ── Email Verification card ──────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
@@ -380,6 +526,119 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+
+          {/* ── KYC Verification card ────────────────────────────────────── */}
+          {agent.phoneVerified && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-semibold text-gray-900">🪪 KYC Verification</div>
+                {agent.kycStatus === 'approved' && (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">✅ KYC Verified</span>
+                )}
+                {agent.kycStatus === 'rejected' && (
+                  <button onClick={() => setKycErrors({})}
+                    className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">Resubmit →</button>
+                )}
+              </div>
+
+              {/* Approved */}
+              {agent.kycStatus === 'approved' && (
+                <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                  <span className="text-2xl">✅</span>
+                  <div>
+                    <div className="text-sm font-semibold text-emerald-800">KYC Verified</div>
+                    <div className="text-xs text-emerald-600 mt-0.5">Aadhaar & PAN verified on {agent.kycApprovedAt}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending review */}
+              {agent.kycStatus === 'submitted' && (
+                <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                  <div className="w-9 h-9 rounded-xl bg-blue-200 flex items-center justify-center text-lg animate-pulse">⏳</div>
+                  <div>
+                    <div className="text-sm font-semibold text-blue-800">KYC Under Review</div>
+                    <div className="text-xs text-blue-600 mt-0.5">Submitted on {agent.kycSubmittedAt}. Admin will review within 24 hours.</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejected — show reason + re-submit form */}
+              {agent.kycStatus === 'rejected' && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <div className="text-sm font-semibold text-red-800">KYC Rejected</div>
+                  <div className="text-xs text-red-600 mt-0.5">Reason: {agent.kycRejectedReason}</div>
+                  <div className="text-xs text-red-500 mt-1">Please correct and resubmit below.</div>
+                </div>
+              )}
+
+              {/* Not submitted OR rejected — show KYC form */}
+              {(!agent.kycStatus || agent.kycStatus === 'not_submitted' || agent.kycStatus === 'rejected') && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-500">Upload your Aadhaar and PAN to complete KYC. This is required for commission payouts.</p>
+
+                  {/* Profile Photo */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Profile Photo <span className="text-gray-400">(optional)</span></label>
+                    <input ref={photoFileRef} type="file" accept="image/*" onChange={e => handleKycFile('profilePhoto', e)} className="hidden" />
+                    <button onClick={() => photoFileRef.current?.click()}
+                      className="w-full border-2 border-dashed border-gray-200 hover:border-blue-400 rounded-xl py-3 text-xs text-gray-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2">
+                      {kycForm.profilePhoto ? `📷 ${kycForm.profilePhoto}` : '📷 Upload Profile Photo'}
+                    </button>
+                  </div>
+
+                  {/* Aadhaar */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Aadhaar Number *</label>
+                    <input type="text" inputMode="numeric" maxLength={14}
+                      value={kycForm.aadhaar}
+                      onChange={e => { setKycForm(f => ({ ...f, aadhaar: e.target.value.replace(/[^\d\s]/g, '') })); setKycErrors(e => ({ ...e, aadhaar: '' })); }}
+                      placeholder="XXXX XXXX XXXX"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 transition-colors ${kycErrors.aadhaar ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-blue-500'}`} />
+                    {kycErrors.aadhaar && <p className="text-xs text-red-500 mt-1">⚠ {kycErrors.aadhaar}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Aadhaar Card Document *</label>
+                    <input ref={aadhaarFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => { handleKycFile('aadhaarDoc', e); setKycErrors(e => ({ ...e, aadhaarDoc: '' })); }} className="hidden" />
+                    <button onClick={() => aadhaarFileRef.current?.click()}
+                      className={`w-full border-2 border-dashed rounded-xl py-3 text-xs flex items-center justify-center gap-2 transition-colors ${kycErrors.aadhaarDoc ? 'border-red-300 text-red-500' : 'border-gray-200 hover:border-blue-400 text-gray-500 hover:text-blue-600'}`}>
+                      {kycForm.aadhaarDoc ? `📄 ${kycForm.aadhaarDoc}` : '📄 Upload Aadhaar Card (PDF/JPG/PNG)'}
+                    </button>
+                    {kycErrors.aadhaarDoc && <p className="text-xs text-red-500 mt-1">⚠ {kycErrors.aadhaarDoc}</p>}
+                  </div>
+
+                  {/* PAN */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">PAN Number *</label>
+                    <input type="text" maxLength={10}
+                      value={kycForm.pan}
+                      onChange={e => { setKycForm(f => ({ ...f, pan: e.target.value.toUpperCase() })); setKycErrors(e => ({ ...e, pan: '' })); }}
+                      placeholder="ABCDE1234F"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm font-mono uppercase focus:outline-none focus:ring-2 transition-colors ${kycErrors.pan ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-blue-500'}`} />
+                    {kycErrors.pan && <p className="text-xs text-red-500 mt-1">⚠ {kycErrors.pan}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">PAN Card Document *</label>
+                    <input ref={panFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => { handleKycFile('panDoc', e); setKycErrors(e => ({ ...e, panDoc: '' })); }} className="hidden" />
+                    <button onClick={() => panFileRef.current?.click()}
+                      className={`w-full border-2 border-dashed rounded-xl py-3 text-xs flex items-center justify-center gap-2 transition-colors ${kycErrors.panDoc ? 'border-red-300 text-red-500' : 'border-gray-200 hover:border-blue-400 text-gray-500 hover:text-blue-600'}`}>
+                      {kycForm.panDoc ? `📄 ${kycForm.panDoc}` : '📄 Upload PAN Card (PDF/JPG/PNG)'}
+                    </button>
+                    {kycErrors.panDoc && <p className="text-xs text-red-500 mt-1">⚠ {kycErrors.panDoc}</p>}
+                  </div>
+
+                  <button onClick={handleSubmitKYC} disabled={kycSubmitting}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+                    {kycSubmitting
+                      ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Submitting…</>
+                      : '🪪 Submit KYC Documents'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Bank details */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

@@ -288,7 +288,7 @@ export default function AgentsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                {['Agent','ID','City','Commission','Leads','This Month','Conv.%','Status','Last Active','Actions'].map(h => (
+                {['Agent','ID','City','Commission','Leads','This Month','Conv.%','Status','Last Active','KYC','Actions'].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -323,6 +323,16 @@ export default function AgentsPage() {
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badge.bg} ${badge.color}`}>{badge.label}</span>
                     </td>
                     <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">{a.lastActive}</td>
+                    <td className="px-5 py-3.5">
+                      {a.kycStatus === 'approved'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ KYC</span>}
+                      {a.kycStatus === 'submitted' && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50  text-violet-700  border border-violet-200  whitespace-nowrap">⏳ KYC Pending</span>}
+                      {a.kycStatus === 'rejected'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50    text-red-600    border border-red-200    whitespace-nowrap">❌ KYC Rejected</span>}
+                      {(!a.kycStatus || a.kycStatus === 'not_submitted') && (
+                        a.phoneVerified
+                          ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">📋 KYC Required</span>
+                          : <span className="text-[10px] text-gray-300 whitespace-nowrap">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => { setEditing(a); setModal('edit'); }} className="text-xs font-medium text-indigo-600 hover:bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors">Edit</button>

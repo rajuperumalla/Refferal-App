@@ -25,7 +25,7 @@ const NAV: NavGroup[] = [
     section: 'Network',
     items: [
       { href: '/admin/hospitals',          icon: '🏨', label: 'Hospitals' },
-      { href: '/admin/bank-verifications', icon: '🏦', label: 'Bank Verifications' },
+      { href: '/admin/bank-verifications', icon: '🔐', label: 'Verifications' },
     ],
   },
   {

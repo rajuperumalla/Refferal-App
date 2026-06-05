@@ -3,12 +3,35 @@
 export type AgentStatus = 'active' | 'inactive' | 'pending' | 'suspended';
 export type HospitalTier = 'preferred' | 'standard' | 'basic';
 
+export type KYCStatus = 'not_submitted' | 'submitted' | 'approved' | 'rejected';
+
+export interface KYCRequest {
+  id: number;
+  agentId: string;
+  agentName: string;
+  phone: string;
+  submittedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  aadhaarNumber: string;  // stored masked: XXXX-XXXX-1234
+  panNumber: string;      // stored masked: XXXXX9999A
+  aadhaarDoc: string;     // filename
+  panDoc: string;         // filename
+  profilePhoto?: string;  // filename
+  rejectionReason?: string;
+  reviewedAt?: string;
+}
+
 export interface AdminAgent {
   id: string;
   name: string;
   phone: string;
+  phoneVerified?: boolean;
   email?: string;
   emailVerified?: boolean;
+  kycStatus?: KYCStatus;
+  kycSubmittedAt?: string;
+  kycApprovedAt?: string;
+  kycRejectedReason?: string;
   city: string;
   state: string;
   status: AgentStatus;
@@ -124,7 +147,7 @@ export interface AdminHospital {
 
 export interface ActivityLog {
   id: number;
-  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated' | 'mop_set';
+  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated' | 'mop_set' | 'kyc_submitted' | 'kyc_approved' | 'kyc_rejected';
   title: string;
   detail: string;
   time: string;

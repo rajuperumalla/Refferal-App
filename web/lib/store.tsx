@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import {
   AdminAgent, AdminPatient, AdminCommission, AdminHospital, ActivityLog,
   ADMIN_AGENTS, ADMIN_PATIENTS, ADMIN_COMMISSIONS, ADMIN_HOSPITALS,
-  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate,
+  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate, KYCRequest,
 } from './admin-data';
 import { Notification } from './types';
 import { NOTIFICATIONS, MONTHLY_EARNINGS } from './data';
@@ -58,7 +58,7 @@ export interface BankVerificationRequest {
 
 export interface AdminNotification {
   id: number;
-  type: 'bank_verification' | 'new_agent' | 'alert';
+  type: 'bank_verification' | 'new_agent' | 'alert' | 'kyc';
   title: string;
   body: string;
   time: string;
@@ -73,6 +73,7 @@ interface AppState {
   patients: AdminPatient[];
   commissions: AdminCommission[];
   hospitals: AdminHospital[];
+  kycRequests: KYCRequest[];
   notifications: AgentNotification[];
   activityLog: ActivityLog[];
   monthlyRevenue: typeof ADMIN_MONTHLY_REVENUE;
@@ -109,7 +110,11 @@ type Action =
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
   | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
   | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog }
-  | { type: 'VERIFY_EMAIL'; agentId: string; email: string };
+  | { type: 'VERIFY_EMAIL'; agentId: string; email: string }
+  | { type: 'VERIFY_PHONE'; agentId: string }
+  | { type: 'SUBMIT_KYC'; agentId: string; kycRequest: KYCRequest; adminNotif: AdminNotification; log: ActivityLog }
+  | { type: 'APPROVE_KYC'; kycId: number; agentId: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'REJECT_KYC'; kycId: number; agentId: string; reason: string; notification: AgentNotification; log: ActivityLog };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -202,6 +207,36 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'VERIFY_EMAIL':
       return { ...state, agents: state.agents.map(a => a.id === action.agentId ? { ...a, email: action.email, emailVerified: true } : a) };
+
+    case 'VERIFY_PHONE':
+      return { ...state, agents: state.agents.map(a => a.id === action.agentId ? { ...a, phoneVerified: true } : a) };
+
+    case 'SUBMIT_KYC':
+      return {
+        ...state,
+        kycRequests: [...state.kycRequests, action.kycRequest],
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'submitted' as const, kycSubmittedAt: today } : a),
+        adminNotifications: [action.adminNotif, ...state.adminNotifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'APPROVE_KYC':
+      return {
+        ...state,
+        kycRequests: state.kycRequests.map(k => k.id === action.kycId ? { ...k, status: 'approved' as const, reviewedAt: today } : k),
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'approved' as const, kycApprovedAt: today } : a),
+        notifications: [...state.notifications, action.notification],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'REJECT_KYC':
+      return {
+        ...state,
+        kycRequests: state.kycRequests.map(k => k.id === action.kycId ? { ...k, status: 'rejected' as const, rejectionReason: action.reason, reviewedAt: today } : k),
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'rejected' as const, kycRejectedReason: action.reason } : a),
+        notifications: [...state.notifications, action.notification],
+        activityLog: [action.log, ...state.activityLog],
+      };
 
     case 'APPROVE_AGENT':
       return {
@@ -354,6 +389,7 @@ const INITIAL_STATE: AppState = {
   patients: ADMIN_PATIENTS,
   commissions: ADMIN_COMMISSIONS,
   hospitals: ADMIN_HOSPITALS,
+  kycRequests: [],
   notifications: NOTIFICATIONS.map(n => ({ ...n, agentId: CURRENT_AGENT_ID })),
   activityLog: ACTIVITY_LOG,
   monthlyRevenue: ADMIN_MONTHLY_REVENUE,
@@ -375,6 +411,7 @@ export interface StoreContextType extends AppState {
   unreadCount: number;
   myPendingAmount: number;
   myApprovedAmount: number;
+  kycRequests: KYCRequest[];
 
   addPatient(data: {
     name: string; phone: string; age: number; gender: 'M' | 'F';
@@ -403,6 +440,10 @@ export interface StoreContextType extends AppState {
   updatePatientStatus(patientId: number, newStatus: string): void;
   setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
   verifyEmail(agentId: string, email: string): void;
+  verifyPhone(agentId: string): void;
+  submitKYC(agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string): void;
+  approveKYC(kycId: number, agentId: string): void;
+  rejectKYC(kycId: number, agentId: string, reason: string): void;
   adminUnreadCount: number;
 }
 
@@ -755,14 +796,91 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const verifyEmail = (agentId: string, email: string) =>
     dispatch({ type: 'VERIFY_EMAIL', agentId, email });
 
+  const verifyPhone = (agentId: string) =>
+    dispatch({ type: 'VERIFY_PHONE', agentId });
+
+  const submitKYC = (agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    const kycId = Math.max(0, ...state.kycRequests.map(k => k.id)) + 1;
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Mask Aadhaar (show last 4) and PAN (show last 5)
+    const maskedAadhaar = `XXXX-XXXX-${aadhaarNumber.slice(-4)}`;
+    const maskedPAN     = `XXXXX${panNumber.slice(-5)}`;
+    dispatch({
+      type: 'SUBMIT_KYC',
+      agentId,
+      kycRequest: {
+        id: kycId, agentId, agentName: agent.name, phone: agent.phone,
+        submittedAt: today, status: 'pending',
+        aadhaarNumber: maskedAadhaar, panNumber: maskedPAN,
+        aadhaarDoc, panDoc, profilePhoto,
+      },
+      adminNotif: {
+        id: Date.now(), type: 'kyc', title: 'KYC Submitted',
+        body: `${agent.name} submitted KYC documents for verification`,
+        time: 'Just now', read: false, refId: kycId,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_submitted',
+        title: 'KYC Documents Submitted',
+        detail: `${agent.name} (${agentId}) submitted Aadhaar & PAN for KYC`,
+        time: 'Just now', actor: agent.name,
+      },
+    });
+  };
+
+  const approveKYC = (kycId: number, agentId: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    dispatch({
+      type: 'APPROVE_KYC', kycId, agentId,
+      notification: {
+        id: Date.now(), type: 'commission', agentId,
+        title: 'KYC Approved ✅',
+        body: 'Your KYC documents have been verified successfully. Your account is fully activated.',
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_approved',
+        title: 'KYC Approved',
+        detail: `KYC for ${agent.name} (${agentId}) approved`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const rejectKYC = (kycId: number, agentId: string, reason: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    dispatch({
+      type: 'REJECT_KYC', kycId, agentId, reason,
+      notification: {
+        id: Date.now(), type: 'patient', agentId,
+        title: 'KYC Rejected ❌',
+        body: `Your KYC documents were rejected. Reason: ${reason}. Please resubmit.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_rejected',
+        title: 'KYC Rejected',
+        detail: `KYC for ${agent.name} (${agentId}) rejected — ${reason}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   return (
     <StoreCtx.Provider value={{
       ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount, myPendingAmount, myApprovedAmount,
+      kycRequests: state.kycRequests,
       addPatient, approveCommission, rejectCommission, markCommissionPaid, approveAllCommissions,
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, setMOP, verifyEmail, adminUnreadCount,
+      markAdminNotificationRead, updatePatientStatus, setMOP,
+      verifyEmail, verifyPhone, submitKYC, approveKYC, rejectKYC,
+      adminUnreadCount,
     }}>
       {children}
     </StoreCtx.Provider>
