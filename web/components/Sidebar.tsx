@@ -48,12 +48,12 @@ export default function Sidebar() {
       </div>
 
       {/* Agent chip */}
-      <div className="px-4 py-3 border-b border-gray-50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+      <div className="relative px-4 py-3 pb-5 border-b border-gray-50">
+        <div className="flex items-center gap-2.5 pt-2">
+          <div className="absolute -top-4 left-4 z-10 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 border-2 border-white shadow-sm">
             {agent?.name[0] ?? 'R'}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 ml-6">
             <div className="text-xs font-semibold text-gray-800 truncate">{agent?.name ?? 'Agent'}</div>
             <div className="text-[10px] text-gray-400">{agent?.id ?? ''}</div>
           </div>
