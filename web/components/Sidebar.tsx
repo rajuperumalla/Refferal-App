@@ -48,21 +48,23 @@ export default function Sidebar() {
       </div>
 
       {/* Agent chip */}
-      <div className="relative overflow-visible px-4 py-4 pb-4 border-b border-gray-50">
-        <div className="flex items-center gap-3 pt-1">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 border-2 border-white shadow-md">
+      <div className="px-3 py-3 border-b border-gray-50">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm ring-2 ring-white">
             {agent?.name[0] ?? 'R'}
           </div>
-          <div className="min-w-0 flex-1 ml-7">
-            <div className="text-xs font-semibold text-gray-800 truncate">{agent?.name ?? 'Agent'}</div>
-            <div className="text-[10px] text-gray-400">{agent?.id ?? ''}</div>
+          {/* Name + ID */}
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-gray-900 truncate">{agent?.name ?? 'Agent'}</div>
+            <div className="text-[10px] text-gray-500 truncate">{agent?.id ?? ''}</div>
           </div>
-          {/* Mini verification indicator */}
+          {/* Verification dots */}
           {agent && (
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <span title="Phone" className={`w-2 h-2 rounded-full ${phoneOk ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-              <span title="Email" className={`w-2 h-2 rounded-full ${emailOk ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-              <span title="KYC"   className={`w-2 h-2 rounded-full ${kycOk ? 'bg-emerald-400' : kycPending ? 'bg-amber-400' : 'bg-gray-300'}`} />
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span title="Phone" className={`w-1.5 h-1.5 rounded-full ${phoneOk ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+              <span title="Email" className={`w-1.5 h-1.5 rounded-full ${emailOk ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+              <span title="KYC"   className={`w-1.5 h-1.5 rounded-full ${kycOk ? 'bg-emerald-500' : kycPending ? 'bg-amber-400' : 'bg-gray-300'}`} />
             </div>
           )}
         </div>
