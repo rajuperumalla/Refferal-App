@@ -17,9 +17,11 @@ const formatDateTimeCompact = (dateStr?: string): string => {
 };
 
 export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
+  const contactedDate = formatDateTimeCompact(p.contactedAt);
   const opdDate = formatDateTimeCompact(p.opdScheduledAt);
   const ipdDate = formatDateTimeCompact(p.ipdConfirmedAt);
-  const hasAppointments = (p.opdScheduledAt || p.ipdConfirmedAt);
+  const completedDate = formatDateTimeCompact(p.completedAt);
+  const hasAppointments = !!(p.contactedAt || p.opdScheduledAt || p.ipdConfirmedAt || p.completedAt);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -52,13 +54,22 @@ export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
           </div>
 
           {/* Hospital Name */}
-          <div className="text-sm font-bold text-gray-900 mb-3">{p.hospital}</div>
+          <div className="text-sm font-bold text-gray-900 mb-3">{p.hospital ?? 'Hospital not assigned'}</div>
 
-          {/* Appointments - Always visible section */}
-          <div className="space-y-2">
+          {/* Appointment timeline - Always visible, no click-through needed */}
+          <div className="space-y-1.5">
+            {p.contactedAt ? (
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-md whitespace-nowrap w-24 text-center">
+                  ☎️ Contacted
+                </span>
+                <span className="text-xs font-semibold text-gray-800">{contactedDate}</span>
+              </div>
+            ) : null}
+
             {p.opdScheduledAt ? (
-              <div className="flex items-center gap-2 py-1">
-                <span className="text-xs font-bold text-blue-700 bg-blue-150 px-2.5 py-1 rounded-md whitespace-nowrap">
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-md whitespace-nowrap w-24 text-center">
                   📅 OPD
                 </span>
                 <span className="text-xs font-semibold text-gray-800">{opdDate}</span>
@@ -66,16 +77,25 @@ export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
             ) : null}
 
             {p.ipdConfirmedAt ? (
-              <div className="flex items-center gap-2 py-1">
-                <span className="text-xs font-bold text-purple-700 bg-purple-150 px-2.5 py-1 rounded-md whitespace-nowrap">
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2.5 py-1 rounded-md whitespace-nowrap w-24 text-center">
                   🏥 IPD
                 </span>
                 <span className="text-xs font-semibold text-gray-800">{ipdDate}</span>
               </div>
             ) : null}
 
+            {p.completedAt ? (
+              <div className="flex items-center gap-2 py-0.5">
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-md whitespace-nowrap w-24 text-center">
+                  ✅ Completed
+                </span>
+                <span className="text-xs font-semibold text-gray-800">{completedDate}</span>
+              </div>
+            ) : null}
+
             {!hasAppointments && (
-              <div className="text-xs text-gray-500 italic">No appointments scheduled</div>
+              <div className="text-xs text-gray-500 italic">No appointments scheduled yet</div>
             )}
           </div>
         </div>

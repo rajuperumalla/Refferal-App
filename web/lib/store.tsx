@@ -112,6 +112,7 @@ type Action =
   | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'SET_OPD_APPOINTMENT_DATE'; patientId: number; opdScheduledAt: string; notification: AgentNotification; log: ActivityLog }
   | { type: 'SET_IPD_CONFIRMATION_DATE'; patientId: number; ipdConfirmedAt: string; conversionDays?: number; opdToIpdAt?: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'SET_COMPLETION_DATE'; patientId: number; completedAt: string; approveCommissionId?: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'VERIFY_EMAIL'; agentId: string; email: string }
   | { type: 'VERIFY_PHONE'; agentId: string }
   | { type: 'SUBMIT_KYC'; agentId: string; kycRequest: KYCRequest; adminNotif: AdminNotification; log: ActivityLog }
@@ -143,11 +144,19 @@ function reducer(state: AppState, action: Action): AppState {
             : c
         );
       }
+      const nowISO = new Date().toISOString();
       return {
         ...state,
-        patients: state.patients.map(p =>
-          p.id === action.patientId ? { ...p, status: action.status } : p
-        ),
+        patients: state.patients.map(p => {
+          if (p.id !== action.patientId) return p;
+          const updated: AdminPatient = { ...p, status: action.status };
+          // Auto-record contact timestamp the first time the team marks a lead "Contacted"
+          if (action.status === 'contacted' && !p.contactedAt) {
+            updated.contactedAt = nowISO;
+            if (!p.contactMethod) updated.contactMethod = 'call';
+          }
+          return updated;
+        }),
         commissions,
         notifications: [action.notification, ...state.notifications],
         activityLog: [action.log, ...state.activityLog],
@@ -314,6 +323,27 @@ function reducer(state: AppState, action: Action): AppState {
         activityLog: [action.log, ...state.activityLog],
       };
 
+    case 'SET_COMPLETION_DATE': {
+      const completionCommissions = action.approveCommissionId !== undefined
+        ? state.commissions.map(c =>
+            c.id === action.approveCommissionId && c.status === 'pending_approval'
+              ? { ...c, status: 'approved' as const, approvedAt: today }
+              : c
+          )
+        : state.commissions;
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, status: 'completed', completedAt: action.completedAt }
+            : p
+        ),
+        commissions: completionCommissions,
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+    }
+
     case 'ADD_HOSPITAL':
       return { ...state, hospitals: [...state.hospitals, action.hospital] };
 
@@ -467,6 +497,7 @@ export interface StoreContextType extends AppState {
   setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
   setOPDAppointmentDate(patientId: number, dateTime: string): void;
   setIPDConfirmationDate(patientId: number, dateTime: string): void;
+  setCompletionDate(patientId: number, dateTime: string): void;
   verifyEmail(agentId: string, email: string): void;
   verifyPhone(agentId: string): void;
   submitKYC(agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string): void;
@@ -479,7 +510,7 @@ const StoreCtx = createContext<StoreContextType | null>(null);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-const LS_KEY = 'medireferral_store_v1';
+const LS_KEY = 'medireferral_store_v2';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE, (init) => {
@@ -842,7 +873,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (patient.opdScheduledAt) {
       const opdDate = new Date(patient.opdScheduledAt);
       const ipdDate = new Date(dateTime);
-      conversionDays = Math.ceil((ipdDate.getTime() - opdDate.getTime()) / (1000 * 60 * 60 * 24));
+      conversionDays = Math.max(0, Math.round((ipdDate.getTime() - opdDate.getTime()) / (1000 * 60 * 60 * 24)));
       opdToIpdAt = new Date().toISOString(); // Conversion happens now
     }
 
@@ -859,6 +890,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         id: nextLogId(), type: 'ipd_confirmed',
         title: 'IPD Admission Confirmed',
         detail: `${patient.name} (${patient.agentName}) — ${new Date(dateTime).toLocaleString('en-IN')}${conversionDays ? ` (${conversionDays} days from OPD)` : ''}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const setCompletionDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    // Auto-approve any pending commission once the case is completed
+    const pending = state.commissions.find(
+      c => c.patientName === patient.name && c.agentId === patient.agentId && c.status === 'pending_approval'
+    );
+
+    dispatch({
+      type: 'SET_COMPLETION_DATE',
+      patientId, completedAt: dateTime, approveCommissionId: pending?.id,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'patient',
+        title: '✅ Treatment Completed',
+        body: `${patient.name}'s treatment is marked completed. ${pending ? 'Your commission has been approved.' : ''} Set MOP to finalise payment.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'patient_completed',
+        title: 'Treatment Completed',
+        detail: `${patient.name} (${patient.agentName}) — completed ${new Date(dateTime).toLocaleString('en-IN')}`,
         time: 'Just now', actor: 'Admin',
       },
     });
@@ -960,7 +1018,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate,
+      markAdminNotificationRead, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate, setCompletionDate,
       verifyEmail, verifyPhone, submitKYC, approveKYC, rejectKYC,
       adminUnreadCount,
     }}>
