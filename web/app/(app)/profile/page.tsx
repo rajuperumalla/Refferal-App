@@ -224,33 +224,50 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Profile hero */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
-        {/* Banner */}
-        <div className="h-32 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
+      {/* Profile hero — fully responsive */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm overflow-visible">
+        {/* Banner — responsive height */}
+        <div className="h-20 sm:h-24 md:h-32 lg:h-40 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, white, transparent)' }} />
         </div>
-        {/* Avatar row — pulled up to overlap banner */}
-        <div className="relative px-6 pb-6">
-          {/* Avatar + edit button */}
-          <div className="flex items-end justify-between">
-            <div className="absolute -top-12 left-6 z-20 w-28 h-28 rounded-3xl bg-blue-600 flex items-center justify-center text-5xl font-bold text-white border-4 border-white shadow-lg flex-shrink-0 hover:shadow-xl transition-shadow">
+
+        {/* Avatar row — responsive layout */}
+        <div className="relative px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8">
+          {/* Avatar + badges flex container */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 sm:gap-0">
+            {/* Avatar — responsive sizing */}
+            <div className="absolute -top-8 left-4 sm:left-6 md:left-8 z-20 w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold text-white border-3 sm:border-4 border-white shadow-md sm:shadow-lg md:shadow-xl flex-shrink-0 hover:shadow-xl sm:hover:shadow-2xl transition-shadow duration-300">
               {agent.name[0]}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 w-full pt-2">
-              <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">ID: {agent.id}</span>
-              <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">{agent.commissionRate}% Commission</span>
-              {isSuspended && <span className="bg-red-100 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full">Suspended</span>}
-              {isPending   && <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-full">Pending</span>}
+
+            {/* Badges container — responsive */}
+            <div className="flex flex-wrap justify-start sm:justify-end gap-2 w-full pt-4 sm:pt-0 pl-20 sm:pl-0">
+              <span className="bg-gray-100 text-gray-700 text-[10px] sm:text-xs font-semibold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full whitespace-nowrap">
+                ID: {agent.id}
+              </span>
+              <span className="bg-emerald-100 text-emerald-700 text-[10px] sm:text-xs font-semibold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full whitespace-nowrap">
+                {agent.commissionRate}% Commission
+              </span>
+              {isSuspended && (
+                <span className="bg-red-100 text-red-700 text-[10px] sm:text-xs font-semibold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full whitespace-nowrap">
+                  Suspended
+                </span>
+              )}
+              {isPending && (
+                <span className="bg-amber-100 text-amber-700 text-[10px] sm:text-xs font-semibold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full whitespace-nowrap">
+                  Pending
+                </span>
+              )}
             </div>
           </div>
-          {/* Name / email */}
-          <div className="pt-12">
-            <div className="text-2xl font-bold text-gray-900">{agent.name}</div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-sm text-gray-500 truncate">{agent.email || 'No email set'}</span>
+
+          {/* Name / email — responsive text sizing */}
+          <div className="pt-6 sm:pt-8 md:pt-12">
+            <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">{agent.name}</div>
+            <div className="flex items-center gap-2 mt-1 sm:mt-2 flex-wrap">
+              <span className="text-xs sm:text-sm text-gray-500 truncate">{agent.email || 'No email set'}</span>
               {agent.email && (
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${agent.emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                <span className={`text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${agent.emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                   {agent.emailVerified ? '✅ Verified' : '⚠️ Unverified'}
                 </span>
               )}
@@ -259,25 +276,25 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Performance stats */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="font-semibold text-gray-900 mb-4">📊 Performance Overview</div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Performance stats — responsive grid */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 md:p-8">
+        <div className="font-semibold text-lg sm:text-xl text-gray-900 mb-3 sm:mb-4">📊 Performance Overview</div>
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           {[
             { label: 'Total Leads',      value: agent.totalLeads,             color: 'text-blue-600' },
             { label: 'Conversion Rate',  value: `${agent.conversionRate}%`,    color: 'text-emerald-600' },
             { label: 'Total Earned',     value: fmt(agent.totalEarned),        color: 'text-amber-600' },
             { label: 'This Month',       value: fmt(agent.thisMonth),          color: 'text-purple-600' },
           ].map(s => (
-            <div key={s.label} className="text-center p-4 bg-gray-50 rounded-xl">
-              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+            <div key={s.label} className="text-center p-3 sm:p-4 md:p-5 bg-gray-50 hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors">
+              <div className={`text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-[10px] sm:text-xs md:text-sm text-gray-500 mt-1 sm:mt-2">{s.label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
         {/* Profile info */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
