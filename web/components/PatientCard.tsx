@@ -4,17 +4,25 @@ import StatusBadge from './StatusBadge';
 
 const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
-const formatDateTimeCompact = (dateStr?: string) => {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  const day = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-  const time = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  return `${day}, ${time}`;
+const formatDateTimeCompact = (dateStr?: string): string => {
+  if (!dateStr) return '';
+  try {
+    const date = new Date(dateStr);
+    const day = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    const time = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return `${day}, ${time}`;
+  } catch {
+    return '';
+  }
 };
 
 export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
+  const opdDate = formatDateTimeCompact(p.opdScheduledAt);
+  const ipdDate = formatDateTimeCompact(p.ipdConfirmedAt);
+  const hasAppointments = (p.opdScheduledAt || p.ipdConfirmedAt);
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
       <div className="p-5 space-y-4">
         {/* Header: Name, Phone, Status */}
         <div className="flex items-start justify-between gap-3">
@@ -37,61 +45,69 @@ export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
           <span className="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded-lg">📍 {p.city}</span>
         </div>
 
-        {/* Hospital + OPD/IPD Dates */}
-        {p.hospital && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1 font-medium">HOSPITAL & APPOINTMENTS</div>
-            <div className="text-sm font-semibold text-gray-900 mb-3">{p.hospital}</div>
-
-            {/* OPD/IPD Dates inline */}
-            <div className="flex flex-col gap-2">
-              {p.opdScheduledAt && (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded whitespace-nowrap">
-                    📅 OPD
-                  </span>
-                  <span className="text-xs text-gray-700 font-medium">{formatDateTimeCompact(p.opdScheduledAt)}</span>
-                </div>
-              )}
-              {p.ipdConfirmedAt && (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded whitespace-nowrap">
-                    🏥 IPD
-                  </span>
-                  <span className="text-xs text-gray-700 font-medium">{formatDateTimeCompact(p.ipdConfirmedAt)}</span>
-                </div>
-              )}
-            </div>
+        {/* Hospital & Appointments Box */}
+        <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">🏥 Hospital & Appointments</span>
           </div>
-        )}
+
+          {/* Hospital Name */}
+          <div className="text-sm font-bold text-gray-900 mb-3">{p.hospital}</div>
+
+          {/* Appointments - Always visible section */}
+          <div className="space-y-2">
+            {p.opdScheduledAt ? (
+              <div className="flex items-center gap-2 py-1">
+                <span className="text-xs font-bold text-blue-700 bg-blue-150 px-2.5 py-1 rounded-md whitespace-nowrap">
+                  📅 OPD
+                </span>
+                <span className="text-xs font-semibold text-gray-800">{opdDate}</span>
+              </div>
+            ) : null}
+
+            {p.ipdConfirmedAt ? (
+              <div className="flex items-center gap-2 py-1">
+                <span className="text-xs font-bold text-purple-700 bg-purple-150 px-2.5 py-1 rounded-md whitespace-nowrap">
+                  🏥 IPD
+                </span>
+                <span className="text-xs font-semibold text-gray-800">{ipdDate}</span>
+              </div>
+            ) : null}
+
+            {!hasAppointments && (
+              <div className="text-xs text-gray-500 italic">No appointments scheduled</div>
+            )}
+          </div>
+        </div>
 
         {/* Commission & Package Cost */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <div className="text-xs text-gray-400 mb-1 font-medium">Commission</div>
-            <div className="font-bold text-emerald-600">{fmt(p.commission)} <span className="text-gray-400 font-normal text-xs">({p.commPct}%)</span></div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="bg-emerald-50 p-3 rounded-lg">
+            <div className="text-xs text-emerald-600 font-bold mb-1">COMMISSION</div>
+            <div className="font-bold text-emerald-700">{fmt(p.commission)}</div>
+            <div className="text-xs text-emerald-600">({p.commPct}%)</div>
           </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1 font-medium">Package Cost</div>
-            <div className="font-semibold text-gray-700">{fmt(p.packageCost)}</div>
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <div className="text-xs text-blue-600 font-bold mb-1">PACKAGE</div>
+            <div className="font-bold text-blue-700">{fmt(p.packageCost)}</div>
           </div>
         </div>
       </div>
 
       {/* Footer: Contact Buttons */}
-      <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+      <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200 flex items-center justify-between">
         <div className="flex gap-2">
           <a href={`tel:${p.phone}`}
-            className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+            className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition-colors">
             ☎️ Call
           </a>
           <a href={`https://wa.me/${p.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
+            className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-100 hover:bg-green-200 px-3 py-1.5 rounded-lg transition-colors">
             💬 WhatsApp
           </a>
         </div>
         <Link href={`/patients/${p.id}`}
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+          className="text-xs font-semibold text-blue-600 hover:text-blue-700">
           View Details →
         </Link>
       </div>
