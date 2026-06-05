@@ -61,9 +61,7 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
     else if (!isValidIndianPhone(rawPhone))
       errs.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6–9)';
 
-    if (!form.email.trim())
-      errs.email = 'Email address is required';
-    else if (!isValidEmail(form.email))
+    if (form.email.trim() && !isValidEmail(form.email))
       errs.email = 'Enter a valid email address (e.g. agent@example.com)';
 
     if (form.upi && !isValidUPI(form.upi))
@@ -138,7 +136,7 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
               <FieldErr msg={errors.phone} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email <span className="text-gray-400 font-normal">(optional)</span></label>
               <input type="email" value={form.email}
                 onChange={e => set('email', e.target.value)}
                 placeholder="agent@example.com"
@@ -218,7 +216,7 @@ export default function AgentsPage() {
 
   const filtered = agents
     .filter(a => filter === 'all' || a.status === filter)
-    .filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()) || a.id.toLowerCase().includes(search.toLowerCase()) || a.city.toLowerCase().includes(search.toLowerCase()) || a.email.toLowerCase().includes(search.toLowerCase()));
+    .filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()) || a.id.toLowerCase().includes(search.toLowerCase()) || a.city.toLowerCase().includes(search.toLowerCase()) || (a.email ?? '').toLowerCase().includes(search.toLowerCase()));
 
   const statusCounts: Record<string, number> = { all: agents.length };
   agents.forEach(a => { statusCounts[a.status] = (statusCounts[a.status] ?? 0) + 1; });

@@ -108,7 +108,8 @@ type Action =
   | { type: 'REJECT_BANK_VERIFICATION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
   | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
-  | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog };
+  | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog }
+  | { type: 'VERIFY_EMAIL'; agentId: string; email: string };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -198,6 +199,9 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'UPDATE_AGENT':
       return { ...state, agents: state.agents.map(a => a.id === action.agent.id ? action.agent : a) };
+
+    case 'VERIFY_EMAIL':
+      return { ...state, agents: state.agents.map(a => a.id === action.agentId ? { ...a, email: action.email, emailVerified: true } : a) };
 
     case 'APPROVE_AGENT':
       return {
@@ -398,6 +402,7 @@ export interface StoreContextType extends AppState {
   markAdminNotificationRead(id: number): void;
   updatePatientStatus(patientId: number, newStatus: string): void;
   setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
+  verifyEmail(agentId: string, email: string): void;
   adminUnreadCount: number;
 }
 
@@ -747,6 +752,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const myPendingAmount   = myCommissions.filter(c => c.status === 'pending_approval').reduce((s, c) => s + c.amount, 0);
   const myApprovedAmount  = myCommissions.filter(c => c.status === 'approved').reduce((s, c) => s + c.amount, 0);
 
+  const verifyEmail = (agentId: string, email: string) =>
+    dispatch({ type: 'VERIFY_EMAIL', agentId, email });
+
   return (
     <StoreCtx.Provider value={{
       ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount, myPendingAmount, myApprovedAmount,
@@ -754,7 +762,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, setMOP, adminUnreadCount,
+      markAdminNotificationRead, updatePatientStatus, setMOP, verifyEmail, adminUnreadCount,
     }}>
       {children}
     </StoreCtx.Provider>

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import type { BankDetails } from '@/lib/store';
 
@@ -12,14 +12,76 @@ const VERIFICATION_BADGE: Record<BankDetails['verificationStatus'], { label: str
   rejected:   { label: '❌ Rejected — Resubmit',  bg: 'bg-red-50',    color: 'text-red-700' },
 };
 
+// ── OTP helpers ───────────────────────────────────────────────────────────────
+const genOTP = () => String(Math.floor(100000 + Math.random() * 900000));
+const OTP_TTL = 5 * 60; // 5 minutes in seconds
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
 export default function ProfilePage() {
-  const { currentAgent, bankDetails, updateBankDetails, submitBankVerification } = useStore();
+  const { currentAgent, bankDetails, updateBankDetails, submitBankVerification, verifyEmail } = useStore();
   const agent = currentAgent;
 
   const [notifs,      setNotifs]      = useState(true);
   const [biometric,   setBiometric]   = useState(false);
   const [darkMode,    setDarkMode]    = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(true);
+
+  // ── Email OTP state ─────────────────────────────────────────────────────────
+  const [emailInput,   setEmailInput]   = useState(agent?.email ?? '');
+  const [otpSent,      setOtpSent]      = useState(false);
+  const [otpCode,      setOtpCode]      = useState('');
+  const [otpInput,     setOtpInput]     = useState('');
+  const [otpError,     setOtpError]     = useState('');
+  const [otpSuccess,   setOtpSuccess]   = useState(false);
+  const [countdown,    setCountdown]    = useState(0);   // seconds remaining
+  const [resendWait,   setResendWait]   = useState(0);   // seconds until resend allowed
+  const [emailErr,     setEmailErr]     = useState('');
+  const [changingEmail,setChangingEmail]= useState(false);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Countdown ticker
+  useEffect(() => {
+    if (countdown <= 0) return;
+    countdownRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { clearInterval(countdownRef.current!); return 0; }
+        return c - 1;
+      });
+      setResendWait(r => Math.max(0, r - 1));
+    }, 1000);
+    return () => clearInterval(countdownRef.current!);
+  }, [otpSent]); // re-arm when OTP is (re-)sent
+
+  const fmtCountdown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const handleSendOTP = () => {
+    if (!isValidEmail(emailInput)) {
+      setEmailErr('Enter a valid email address (e.g. agent@example.com)');
+      return;
+    }
+    setEmailErr('');
+    const code = genOTP();
+    setOtpCode(code);
+    setOtpInput('');
+    setOtpError('');
+    setOtpSent(true);
+    setOtpSuccess(false);
+    setCountdown(OTP_TTL);
+    setResendWait(30); // 30s before resend allowed
+  };
+
+  const handleVerifyOTP = () => {
+    if (countdown <= 0) { setOtpError('OTP expired. Please request a new one.'); return; }
+    if (otpInput.trim() === otpCode) {
+      verifyEmail(agent!.id, emailInput.trim());
+      setOtpSuccess(true);
+      setOtpSent(false);
+      setChangingEmail(false);
+      clearInterval(countdownRef.current!);
+    } else {
+      setOtpError('Incorrect OTP. Please try again.');
+    }
+  };
 
   // Bank details form
   const [bankForm, setBankForm] = useState<BankDetails>(bankDetails);
@@ -114,7 +176,14 @@ export default function ProfilePage() {
           {/* Name / email */}
           <div>
             <div className="text-xl font-bold text-gray-900">{agent.name}</div>
-            <div className="text-sm text-gray-500 mt-0.5 truncate">{agent.email}</div>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-sm text-gray-500 truncate">{agent.email || 'No email set'}</span>
+              {agent.email && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${agent.emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {agent.emailVerified ? '✅ Verified' : '⚠️ Unverified'}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -145,23 +214,173 @@ export default function ProfilePage() {
             <button className="text-blue-600 text-xs font-medium hover:underline">Edit</button>
           </div>
           {[
-            { icon: '👤', label: 'Full Name', value: agent.name },
-            { icon: '📱', label: 'Phone',     value: agent.phone },
-            { icon: '📧', label: 'Email',     value: agent.email },
-            { icon: '📍', label: 'City',      value: `${agent.city}, ${agent.state}` },
-            { icon: '🆔', label: 'Agent ID',  value: agent.id },
+            { icon: '👤', label: 'Full Name', value: agent.name,                             extra: null },
+            { icon: '📱', label: 'Phone',     value: agent.phone,                            extra: null },
+            { icon: '📧', label: 'Email',     value: agent.email || '—',                     extra: agent.email ? (agent.emailVerified ? '✅ Verified' : '⚠️ Unverified') : null },
+            { icon: '📍', label: 'City',      value: `${agent.city}, ${agent.state}`,        extra: null },
+            { icon: '🆔', label: 'Agent ID',  value: agent.id,                               extra: null },
           ].map(f => (
             <div key={f.label} className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
               <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-sm flex-shrink-0">{f.icon}</div>
               <div className="flex-1">
                 <div className="text-xs text-gray-400">{f.label}</div>
-                <div className="text-sm font-medium text-gray-800">{f.value}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-800">{f.value}</span>
+                  {f.extra && (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${f.extra.includes('✅') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {f.extra}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         <div className="space-y-5">
+
+          {/* ── Email Verification card ──────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold text-gray-900">📧 Email Verification</div>
+              {agent.emailVerified && !changingEmail && (
+                <button onClick={() => { setChangingEmail(true); setEmailInput(''); setOtpSent(false); setOtpSuccess(false); }}
+                  className="text-blue-600 text-xs font-medium hover:underline">Change Email</button>
+              )}
+            </div>
+
+            {/* Already verified and not changing */}
+            {agent.emailVerified && !changingEmail ? (
+              <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                <span className="text-2xl">✅</span>
+                <div>
+                  <div className="text-sm font-semibold text-emerald-800">{agent.email}</div>
+                  <div className="text-xs text-emerald-600 mt-0.5">Email verified successfully</div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+
+                {/* Unverified email notice */}
+                {agent.email && !agent.emailVerified && !changingEmail && (
+                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                    <span>⚠️</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-amber-800">Email not verified</div>
+                      <div className="text-xs text-amber-600 truncate">{agent.email}</div>
+                    </div>
+                    <button onClick={() => { setEmailInput(agent.email ?? ''); setOtpSent(false); }}
+                      className="text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg whitespace-nowrap">
+                      Verify now
+                    </button>
+                  </div>
+                )}
+
+                {/* Email input */}
+                {(!otpSent || changingEmail) && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                      {changingEmail ? 'New Email Address' : 'Your Email Address'}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={e => { setEmailInput(e.target.value); setEmailErr(''); }}
+                        placeholder="agent@example.com"
+                        className={`flex-1 border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors ${
+                          emailErr ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-blue-500'
+                        }`}
+                      />
+                      <button onClick={handleSendOTP}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl whitespace-nowrap transition-colors">
+                        Send OTP
+                      </button>
+                    </div>
+                    {emailErr && <p className="text-xs text-red-500 mt-1.5">⚠ {emailErr}</p>}
+                  </div>
+                )}
+
+                {/* OTP sent state */}
+                {otpSent && (
+                  <div className="space-y-3">
+
+                    {/* Sent confirmation + demo OTP */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-base mt-0.5">📨</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-blue-800">OTP sent to {emailInput}</div>
+                          <div className="text-xs text-blue-600 mt-0.5">Valid for {fmtCountdown(countdown)}</div>
+                        </div>
+                        <span className={`text-xs font-bold tabular-nums ${countdown < 60 ? 'text-red-500' : 'text-blue-600'}`}>
+                          {fmtCountdown(countdown)}
+                        </span>
+                      </div>
+                      {/* Demo hint */}
+                      <div className="mt-2 pt-2 border-t border-blue-100 flex items-center gap-2">
+                        <span className="text-[10px] text-blue-400">🔬 Demo OTP:</span>
+                        <code className="text-sm font-bold font-mono tracking-[0.25em] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-lg select-all">{otpCode}</code>
+                      </div>
+                    </div>
+
+                    {/* OTP input */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">Enter 6-digit OTP</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={otpInput}
+                          onChange={e => { setOtpInput(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
+                          placeholder="• • • • • •"
+                          className={`flex-1 border-2 rounded-xl px-4 py-2.5 text-center text-lg font-bold font-mono tracking-[0.5em] focus:outline-none transition-colors ${
+                            otpError ? 'border-red-400 bg-red-50/30' : 'border-blue-200 focus:border-blue-500'
+                          }`}
+                        />
+                        <button
+                          onClick={handleVerifyOTP}
+                          disabled={otpInput.length !== 6 || countdown <= 0}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl whitespace-nowrap transition-colors">
+                          ✓ Verify
+                        </button>
+                      </div>
+                      {otpError && <p className="text-xs text-red-500 mt-1.5">⚠ {otpError}</p>}
+                      {countdown <= 0 && (
+                        <p className="text-xs text-red-500 mt-1.5">⚠ OTP expired. Click Resend to get a new one.</p>
+                      )}
+                    </div>
+
+                    {/* Resend + change email links */}
+                    <div className="flex items-center justify-between text-xs">
+                      {resendWait > 0 ? (
+                        <span className="text-gray-400">Resend in {resendWait}s</span>
+                      ) : (
+                        <button onClick={handleSendOTP} className="text-blue-600 hover:underline font-medium">
+                          Resend OTP
+                        </button>
+                      )}
+                      <button onClick={() => { setOtpSent(false); setOtpInput(''); setOtpError(''); }}
+                        className="text-gray-400 hover:text-gray-600">
+                        ← Change email
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success flash (just verified) */}
+                {otpSuccess && (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
+                    <span>✅</span>
+                    <div className="text-xs font-semibold text-emerald-700">Email verified successfully!</div>
+                  </div>
+                )}
+
+              </div>
+            )}
+          </div>
+
           {/* Bank details */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-1">

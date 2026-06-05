@@ -7,7 +7,8 @@ export interface AdminAgent {
   id: string;
   name: string;
   phone: string;
-  email: string;
+  email?: string;
+  emailVerified?: boolean;
   city: string;
   state: string;
   status: AgentStatus;
