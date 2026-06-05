@@ -35,37 +35,40 @@ export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
           <span className="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded-lg">📍 {p.city}</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Commission</div>
-            <div className="font-bold text-emerald-600">{fmt(p.commission)} <span className="text-gray-400 font-normal text-xs">({p.commPct}%)</span></div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Package Cost</div>
-            <div className="font-semibold text-gray-700">{fmt(p.packageCost)}</div>
-          </div>
+        <div className="space-y-3">
           {p.hospital && (
-            <div className="col-span-2">
-              <div className="text-xs text-gray-400 mb-0.5">Hospital</div>
+            <div>
+              <div className="text-xs text-gray-400 mb-1">Hospital</div>
               <div className="text-sm font-medium text-gray-700 mb-2">{p.hospital}</div>
-            </div>
-          )}
-          {(p.opdScheduledAt || p.ipdConfirmedAt) && (
-            <div className="col-span-2 space-y-2 border-t border-gray-100 pt-2 mt-1">
-              {p.opdScheduledAt && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">OPD</span>
-                  <span className="text-xs text-gray-600">{formatDateTimeCompact(p.opdScheduledAt)}</span>
+              {(p.opdScheduledAt || p.ipdConfirmedAt) && (
+                <div className="flex flex-col gap-1.5 pl-0">
+                  {p.opdScheduledAt && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded whitespace-nowrap">📅 OPD</span>
+                      <span className="text-gray-600">{formatDateTimeCompact(p.opdScheduledAt)}</span>
+                    </div>
+                  )}
+                  {p.ipdConfirmedAt && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded whitespace-nowrap">🏥 IPD</span>
+                      <span className="text-gray-600">{formatDateTimeCompact(p.ipdConfirmedAt)}</span>
+                    </div>
+                  )}
                 </div>
               )}
-              {p.ipdConfirmedAt && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">IPD</span>
-                  <span className="text-xs text-gray-600">{formatDateTimeCompact(p.ipdConfirmedAt)}</span>
-                </div>
-              )}
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-3 text-sm border-t border-gray-100 pt-3">
+            <div>
+              <div className="text-xs text-gray-400 mb-0.5">Commission</div>
+              <div className="font-bold text-emerald-600">{fmt(p.commission)} <span className="text-gray-400 font-normal text-xs">({p.commPct}%)</span></div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-400 mb-0.5">Package Cost</div>
+              <div className="font-semibold text-gray-700">{fmt(p.packageCost)}</div>
+            </div>
+          </div>
         </div>
       </div>
 
