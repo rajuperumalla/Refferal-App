@@ -172,7 +172,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-HYD-001', name: 'Rajesh Sharma', phone: '+91 98765 43210',
     email: 'rajesh@medireferral.in', city: 'Hyderabad', state: 'Telangana',
-    status: 'active', commissionRate: 4, totalLeads: 45, totalEarned: 230000,
+    phoneVerified: true, status: 'active', commissionRate: 4, totalLeads: 45, totalEarned: 230000,
     thisMonth: 45230, pending: 8400, conversionRate: 68, joinedAt: '12 Jan 2024',
     lastActive: 'Today', bank: 'HDFC ••••4521', upi: 'rajesh@hdfc',
     specialties: ['Orthopaedics', 'Cardiology', 'Urology'],
@@ -180,7 +180,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-BLR-001', name: 'Preethi Nair', phone: '+91 97654 32109',
     email: 'preethi.nair@gmail.com', city: 'Bangalore', state: 'Karnataka',
-    status: 'active', commissionRate: 3.5, totalLeads: 38, totalEarned: 185000,
+    phoneVerified: true, status: 'active', commissionRate: 3.5, totalLeads: 38, totalEarned: 185000,
     thisMonth: 38400, pending: 6200, conversionRate: 72, joinedAt: '5 Feb 2024',
     lastActive: 'Yesterday', bank: 'SBI ••••7832', upi: 'preethi@sbi',
     specialties: ['Gynecology', 'General Surgery', 'ENT'],
@@ -188,7 +188,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-MUM-001', name: 'Amit Patel', phone: '+91 96543 21098',
     email: 'amit.patel@referralnet.in', city: 'Mumbai', state: 'Maharashtra',
-    status: 'active', commissionRate: 4, totalLeads: 52, totalEarned: 312000,
+    phoneVerified: true, status: 'active', commissionRate: 4, totalLeads: 52, totalEarned: 312000,
     thisMonth: 58200, pending: 11400, conversionRate: 75, joinedAt: '20 Jan 2024',
     lastActive: 'Today', bank: 'ICICI ••••2341', upi: 'amit@icici',
     specialties: ['Cardiology', 'Neurology', 'Orthopaedics'],
@@ -196,7 +196,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-DEL-001', name: 'Sunita Verma', phone: '+91 95432 10987',
     email: 'sunita.verma@healthlink.in', city: 'Delhi', state: 'Delhi',
-    status: 'active', commissionRate: 3.75, totalLeads: 41, totalEarned: 198000,
+    phoneVerified: true, status: 'active', commissionRate: 3.75, totalLeads: 41, totalEarned: 198000,
     thisMonth: 41800, pending: 7500, conversionRate: 66, joinedAt: '8 Mar 2024',
     lastActive: '2 days ago', bank: 'Axis ••••9012', upi: 'sunita@axisbank',
     specialties: ['Oncology', 'Cardiology', 'Pulmonology'],
@@ -204,7 +204,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-CHN-001', name: 'Karthik Raja', phone: '+91 94321 09876',
     email: 'karthik.raja@medconnect.in', city: 'Chennai', state: 'Tamil Nadu',
-    status: 'active', commissionRate: 4, totalLeads: 29, totalEarned: 142000,
+    phoneVerified: true, status: 'active', commissionRate: 4, totalLeads: 29, totalEarned: 142000,
     thisMonth: 29600, pending: 5100, conversionRate: 62, joinedAt: '15 Mar 2024',
     lastActive: 'Today', bank: 'IOB ••••5567', upi: 'karthik@upi',
     specialties: ['ENT', 'Ophthalmology', 'Dermatology'],
@@ -212,7 +212,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-PNE-001', name: 'Meera Joshi', phone: '+91 93210 98765',
     email: 'meera.joshi@patientsbridge.in', city: 'Pune', state: 'Maharashtra',
-    status: 'active', commissionRate: 3.5, totalLeads: 23, totalEarned: 108000,
+    phoneVerified: true, status: 'active', commissionRate: 3.5, totalLeads: 23, totalEarned: 108000,
     thisMonth: 22400, pending: 3800, conversionRate: 60, joinedAt: '2 Apr 2024',
     lastActive: '3 days ago', bank: 'PNB ••••3345', upi: 'meera@pnb',
     specialties: ['Urology', 'Nephrology'],
@@ -220,7 +220,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-HYD-002', name: 'Ravi Kumar', phone: '+91 92109 87654',
     email: 'ravi.kumar@hyperefhyd.in', city: 'Hyderabad', state: 'Telangana',
-    status: 'active', commissionRate: 4, totalLeads: 34, totalEarned: 167000,
+    phoneVerified: true, status: 'active', commissionRate: 4, totalLeads: 34, totalEarned: 167000,
     thisMonth: 34100, pending: 5900, conversionRate: 64, joinedAt: '10 Apr 2024',
     lastActive: 'Yesterday', bank: 'HDFC ••••8823', upi: 'ravi.kumar@hdfc',
     specialties: ['General Surgery', 'Gastroenterology'],
@@ -228,7 +228,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-BLR-002', name: 'Ananya Singh', phone: '+91 91098 76543',
     email: 'ananya.s@gmail.com', city: 'Bangalore', state: 'Karnataka',
-    status: 'inactive', commissionRate: 3.5, totalLeads: 12, totalEarned: 48000,
+    phoneVerified: true, status: 'inactive', commissionRate: 3.5, totalLeads: 12, totalEarned: 48000,
     thisMonth: 0, pending: 2400, conversionRate: 41, joinedAt: '22 Apr 2024',
     lastActive: '14 days ago', bank: 'Kotak ••••1234', upi: 'ananya@kotak',
     specialties: ['Gynecology'],
@@ -236,7 +236,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-MUM-002', name: 'Vikram Mehta', phone: '+91 90987 65432',
     email: 'vikram.mehta@gmail.com', city: 'Mumbai', state: 'Maharashtra',
-    status: 'pending', commissionRate: 4, totalLeads: 0, totalEarned: 0,
+    phoneVerified: true, status: 'pending', commissionRate: 4, totalLeads: 0, totalEarned: 0,
     thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '20 May 2024',
     lastActive: 'Never', bank: 'HDFC ••••6789', upi: 'vikram@hdfc',
     specialties: [],
@@ -244,7 +244,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: 'AG-CHN-002', name: 'Deepa Nandakumar', phone: '+91 89876 54321',
     email: 'deepa.n@medreferral.in', city: 'Chennai', state: 'Tamil Nadu',
-    status: 'suspended', commissionRate: 3.75, totalLeads: 18, totalEarned: 72000,
+    phoneVerified: true, status: 'suspended', commissionRate: 3.75, totalLeads: 18, totalEarned: 72000,
     thisMonth: 0, pending: 0, conversionRate: 50, joinedAt: '1 Mar 2024',
     lastActive: '30 days ago', bank: 'Canara ••••4456', upi: 'deepa@upi',
     specialties: ['Oncology', 'Haematology'],
