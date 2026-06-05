@@ -286,7 +286,7 @@ export default function ProfilePage() {
           </div>
           {[
             { icon: '👤', label: 'Full Name', value: agent.name,                             extra: null },
-            { icon: '📱', label: 'Phone',     value: agent.phone,                            extra: null },
+            { icon: '📱', label: 'Phone',     value: agent.phone,                            extra: agent.phoneVerified ? '✅ Verified' : '⚠️ Unverified' },
             { icon: '📧', label: 'Email',     value: agent.email || '—',                     extra: agent.email ? (agent.emailVerified ? '✅ Verified' : '⚠️ Unverified') : null },
             { icon: '📍', label: 'City',      value: `${agent.city}, ${agent.state}`,        extra: null },
             { icon: '🆔', label: 'Agent ID',  value: agent.id,                               extra: null },
@@ -317,10 +317,13 @@ export default function ProfilePage() {
             {agent.phoneVerified ? (
               <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
                 <span className="text-2xl">✅</span>
-                <div>
+                <div className="flex-1">
                   <div className="text-sm font-semibold text-emerald-800">{agent.phone}</div>
-                  <div className="text-xs text-emerald-600 mt-0.5">Phone number verified</div>
+                  <div className="text-xs text-emerald-600 mt-0.5">Phone verified — KYC submission unlocked</div>
                 </div>
+                <span className="text-[10px] text-emerald-600 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                  Verified at registration
+                </span>
               </div>
             ) : (
               <div className="space-y-3">

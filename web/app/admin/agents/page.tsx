@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { AdminAgent, AgentStatus, STATUS_BADGE, CITY_CODES, generateAgentId, fmtINR, fmtL } from '@/lib/admin-data';
 
@@ -14,6 +14,9 @@ const isValidName  = (v: string) =>
   v.trim().length >= 2 && v.trim().length <= 60 && /^[a-zA-Z\s\-.']+$/.test(v.trim());
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 const isValidUPI   = (v: string) => !v.trim() || /^[\w.\-]+@[\w]+$/.test(v.trim());
+const genOTP       = () => String(Math.floor(100000 + Math.random() * 900000));
+const OTP_TTL      = 5 * 60;
+const fmtTime      = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 type AgentErrors = Partial<Record<'name' | 'phone' | 'email' | 'upi', string>>;
 
@@ -38,6 +41,67 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
   });
   const [errors, setErrors] = useState<AgentErrors>({});
 
+  // ── Phone OTP state (only for new agents) ────────────────────────────────
+  const isNew = !existing;
+  const alreadyVerified = existing?.phoneVerified ?? false;
+  const [phoneVerified, setPhoneVerified] = useState(alreadyVerified);
+  const [otpSent,       setOtpSent]       = useState(false);
+  const [otpCode,       setOtpCode]       = useState('');
+  const [otpInput,      setOtpInput]      = useState('');
+  const [otpError,      setOtpError]      = useState('');
+  const [countdown,     setCountdown]     = useState(0);
+  const [resendWait,    setResendWait]     = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    timerRef.current = setInterval(() => {
+      setCountdown(c => { if (c <= 1) { clearInterval(timerRef.current!); return 0; } return c - 1; });
+      setResendWait(r => Math.max(0, r - 1));
+    }, 1000);
+    return () => clearInterval(timerRef.current!);
+  }, [otpSent]);
+
+  // If phone changes after verification, reset verification
+  const prevPhoneRef = useRef(form.phone);
+  const handlePhoneChange = (val: string) => {
+    setForm(f => ({ ...f, phone: val }));
+    setErrors(e => ({ ...e, phone: undefined }));
+    if (val !== prevPhoneRef.current) {
+      prevPhoneRef.current = val;
+      setPhoneVerified(false);
+      setOtpSent(false);
+      setOtpInput('');
+      setOtpError('');
+    }
+  };
+
+  const sendOTP = () => {
+    const raw = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '');
+    if (!isValidIndianPhone(raw)) {
+      setErrors(e => ({ ...e, phone: 'Enter a valid 10-digit Indian mobile number (starts with 6–9)' }));
+      return;
+    }
+    const code = genOTP();
+    setOtpCode(code);
+    setOtpInput('');
+    setOtpError('');
+    setOtpSent(true);
+    setCountdown(OTP_TTL);
+    setResendWait(30);
+  };
+
+  const verifyOTP = () => {
+    if (countdown <= 0) { setOtpError('OTP expired. Send a new one.'); return; }
+    if (otpInput.trim() === otpCode) {
+      setPhoneVerified(true);
+      setOtpSent(false);
+      clearInterval(timerRef.current!);
+    } else {
+      setOtpError('Incorrect OTP. Please try again.');
+    }
+  };
+
   const set = (k: string, v: unknown) => {
     setForm(f => ({ ...f, [k]: v }));
     if (k in (errors as object)) setErrors(e => ({ ...e, [k]: undefined }));
@@ -49,7 +113,6 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
 
   const validate = (): boolean => {
     const errs: AgentErrors = {};
-
     if (!form.name.trim())
       errs.name = 'Full name is required';
     else if (!isValidName(form.name))
@@ -63,7 +126,6 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
 
     if (form.email.trim() && !isValidEmail(form.email))
       errs.email = 'Enter a valid email address (e.g. agent@example.com)';
-
     if (form.upi && !isValidUPI(form.upi))
       errs.upi = 'Enter a valid UPI ID (e.g. agent@hdfc or name@okaxis)';
 
@@ -73,13 +135,16 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
 
   const handleSave = () => {
     if (!validate()) return;
-    // Normalise phone to "+91 XXXXX XXXXX" format
-    const digits = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '');
+    if (isNew && !phoneVerified) {
+      setErrors(e => ({ ...e, phone: 'Mobile number must be verified before creating the agent' }));
+      return;
+    }
+    const digits    = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '');
     const normPhone = `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-    const saved = { ...form, phone: normPhone };
+    const saved     = { ...form, phone: normPhone };
     onSave(existing
-      ? { ...existing, ...saved }
-      : { ...saved, id: previewId, totalLeads: 0, totalEarned: 0, thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '', lastActive: 'Never' }
+      ? { ...existing, ...saved, phoneVerified: existing.phoneVerified }
+      : { ...saved, id: previewId, phoneVerified: true, totalLeads: 0, totalEarned: 0, thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '', lastActive: 'Never' }
     );
   };
 
@@ -94,7 +159,7 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <div>
             <div className="font-bold text-gray-900 text-lg">{existing ? 'Edit Agent' : 'Create New Agent'}</div>
-            {!existing && <div className="text-xs text-gray-400 mt-0.5">Agent ID is auto-generated based on city</div>}
+            {!existing && <div className="text-xs text-gray-400 mt-0.5">Phone number must be verified before saving</div>}
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500">✕</button>
         </div>
@@ -117,24 +182,98 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
                 className={iCls('name')} />
               <FieldErr msg={errors.name} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone *</label>
+
+            {/* ── Phone + OTP Verification ──────────────────────────────── */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Mobile Number *
+                {phoneVerified && (
+                  <span className="ml-2 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✅ Verified</span>
+                )}
+                {isNew && !phoneVerified && (
+                  <span className="ml-2 text-xs text-amber-600 font-normal">— must verify via OTP</span>
+                )}
+              </label>
+
+              {/* Phone input row */}
               <div className="flex gap-2">
                 <div className="flex items-center border border-gray-200 rounded-xl px-3 bg-gray-50 text-sm text-gray-700 whitespace-nowrap">🇮🇳 +91</div>
                 <input
                   value={form.phone.replace(/^\+91\s?/, '')}
-                  onChange={e => {
-                    const val = e.target.value.replace(/[^\d\s\-]/g, '');
-                    set('phone', val);
-                  }}
+                  onChange={e => handlePhoneChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
                   maxLength={13}
                   placeholder="98765 43210"
+                  readOnly={phoneVerified}
                   className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors ${
-                    errors.phone ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-indigo-500'
+                    phoneVerified ? 'border-emerald-300 bg-emerald-50/50 text-emerald-800 cursor-not-allowed' :
+                    errors.phone  ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-indigo-500'
                   }`} />
+                {isNew && !phoneVerified && !otpSent && (
+                  <button type="button" onClick={sendOTP}
+                    className="whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
+                    Send OTP
+                  </button>
+                )}
+                {phoneVerified && isNew && (
+                  <button type="button" onClick={() => { setPhoneVerified(false); setOtpSent(false); }}
+                    className="whitespace-nowrap text-xs text-gray-400 hover:text-gray-600 px-3 py-2.5 border border-gray-200 rounded-xl">
+                    Change
+                  </button>
+                )}
               </div>
               <FieldErr msg={errors.phone} />
+
+              {/* OTP panel */}
+              {isNew && otpSent && !phoneVerified && (
+                <div className="mt-3 bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-semibold text-blue-800">📨 OTP sent to +91 {form.phone.replace(/^\+91\s?/, '')}</div>
+                      <div className="text-xs text-blue-600 mt-0.5">Valid for {fmtTime(countdown)}</div>
+                    </div>
+                    <span className={`text-sm font-bold tabular-nums ${countdown < 60 ? 'text-red-500' : 'text-blue-600'}`}>{fmtTime(countdown)}</span>
+                  </div>
+                  {/* Demo OTP */}
+                  <div className="flex items-center gap-2 bg-white border border-blue-100 rounded-lg px-3 py-2">
+                    <span className="text-[10px] text-blue-400">🔬 Demo OTP:</span>
+                    <code className="text-base font-bold font-mono tracking-[0.3em] text-blue-700 select-all">{otpCode}</code>
+                  </div>
+                  {/* OTP input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text" inputMode="numeric" maxLength={6} value={otpInput}
+                      onChange={e => { setOtpInput(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
+                      placeholder="Enter 6-digit OTP"
+                      className={`flex-1 border-2 rounded-xl px-4 py-2.5 text-center text-lg font-bold font-mono tracking-[0.4em] focus:outline-none transition-colors ${
+                        otpError ? 'border-red-400 bg-red-50/30' : 'border-blue-300 focus:border-indigo-500'
+                      }`} />
+                    <button type="button" onClick={verifyOTP}
+                      disabled={otpInput.length !== 6 || countdown <= 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl whitespace-nowrap">
+                      ✓ Verify
+                    </button>
+                  </div>
+                  {otpError && <p className="text-xs text-red-500">⚠ {otpError}</p>}
+                  <div className="flex justify-between text-xs">
+                    {resendWait > 0
+                      ? <span className="text-gray-400">Resend in {resendWait}s</span>
+                      : <button type="button" onClick={sendOTP} className="text-indigo-600 hover:underline font-medium">Resend OTP</button>
+                    }
+                    <button type="button" onClick={() => { setOtpSent(false); setOtpInput(''); setOtpError(''); }}
+                      className="text-gray-400 hover:text-gray-600">← Change number</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Verified confirmation strip */}
+              {isNew && phoneVerified && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                  <span>✅</span>
+                  <span className="font-medium">Mobile number verified — agent will have full access from day one</span>
+                </div>
+              )}
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email <span className="text-gray-400 font-normal">(optional)</span></label>
               <input type="email" value={form.email}
