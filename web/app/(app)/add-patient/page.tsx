@@ -87,7 +87,7 @@ export default function AddPatientPage() {
     setTimeout(() => {
       addPatient({
         name:        form.name.trim()     || 'New Patient',
-        phone:       form.phone ? `+91 ${form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '')}` : '+91 00000 00000',
+        phone:       (() => { const d = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, ''); return d ? `+91 ${d.slice(0,5)} ${d.slice(5)}` : '+91 00000 00000'; })(),
         age:         parseInt(form.age, 10) || 30,
         gender,
         specialty:   form.specialty   || 'General Surgery',
