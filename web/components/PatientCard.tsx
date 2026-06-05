@@ -4,6 +4,14 @@ import StatusBadge from './StatusBadge';
 
 const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
+const formatDateTimeCompact = (dateStr?: string) => {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  const day = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  const time = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${time}`;
+};
+
 export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
@@ -39,7 +47,23 @@ export default function PatientCard({ patient: p }: { patient: AdminPatient }) {
           {p.hospital && (
             <div className="col-span-2">
               <div className="text-xs text-gray-400 mb-0.5">Hospital</div>
-              <div className="text-sm font-medium text-gray-700">{p.hospital}</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">{p.hospital}</div>
+            </div>
+          )}
+          {(p.opdScheduledAt || p.ipdConfirmedAt) && (
+            <div className="col-span-2 space-y-2 border-t border-gray-100 pt-2 mt-1">
+              {p.opdScheduledAt && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">OPD</span>
+                  <span className="text-xs text-gray-600">{formatDateTimeCompact(p.opdScheduledAt)}</span>
+                </div>
+              )}
+              {p.ipdConfirmedAt && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">IPD</span>
+                  <span className="text-xs text-gray-600">{formatDateTimeCompact(p.ipdConfirmedAt)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
