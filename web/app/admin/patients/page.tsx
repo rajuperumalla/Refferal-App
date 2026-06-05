@@ -38,7 +38,7 @@ const EMPTY_FORM: MopForm = {
 };
 
 export default function AdminPatientsPage() {
-  const { patients, agents, updatePatientStatus, setMOP } = useStore();
+  const { patients, agents, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate } = useStore();
 
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -48,6 +48,8 @@ export default function AdminPatientsPage() {
   const [mopPatientId, setMopPatientId] = useState<number | null>(null);
   const [mopForm,      setMopForm]      = useState<MopForm>(EMPTY_FORM);
   const [toast,        setToast]        = useState<string | null>(null);
+  const [appointmentModal, setAppointmentModal] = useState<{ patientId: number; type: 'opd' | 'ipd'; patientName: string } | null>(null);
+  const [appointmentDateTime, setAppointmentDateTime] = useState('');
 
   const activeAgents = agents.filter(a => a.status === 'active');
 
@@ -78,11 +80,23 @@ export default function AdminPatientsPage() {
   };
 
   const handleStatusChange = (patientId: number, newStatus: string, patientName: string) => {
+    // For "contacted" and "ipd_confirmed", open appointment date picker modal
+    if (newStatus === 'contacted') {
+      setAppointmentModal({ patientId, type: 'opd', patientName });
+      setAppointmentDateTime('');
+      setEditingId(null);
+      return;
+    }
+    if (newStatus === 'ipd_confirmed') {
+      setAppointmentModal({ patientId, type: 'ipd', patientName });
+      setAppointmentDateTime('');
+      setEditingId(null);
+      return;
+    }
+    // For other status changes, update directly
     updatePatientStatus(patientId, newStatus);
     setEditingId(null);
-    const msg = newStatus === 'ipd_confirmed'
-      ? `✅ ${patientName} → IPD Confirmed. Commission queued for approval!`
-      : newStatus === 'completed'
+    const msg = newStatus === 'completed'
       ? `🎉 ${patientName} → Completed. Now set MOP & ticket size.`
       : newStatus === 'lost'
       ? `❌ ${patientName} marked as Lost.`
@@ -103,6 +117,24 @@ export default function AdminPatientsPage() {
     });
     setMopPatientId(patientId);
     setEditingId(null);
+  };
+
+  const confirmAppointmentDate = () => {
+    if (!appointmentModal || !appointmentDateTime) return;
+    const { patientId, type, patientName } = appointmentModal;
+
+    // First set the appointment date
+    if (type === 'opd') {
+      setOPDAppointmentDate(patientId, appointmentDateTime);
+      updatePatientStatus(patientId, 'contacted');
+      showToast(`📅 OPD appointment scheduled for ${patientName} on ${new Date(appointmentDateTime).toLocaleString('en-IN')}`);
+    } else {
+      setIPDConfirmationDate(patientId, appointmentDateTime);
+      updatePatientStatus(patientId, 'ipd_confirmed');
+      showToast(`🏥 IPD admission confirmed for ${patientName} on ${new Date(appointmentDateTime).toLocaleString('en-IN')}`);
+    }
+    setAppointmentModal(null);
+    setAppointmentDateTime('');
   };
 
   const confirmMOP = (patientId: number, patientName: string) => {
@@ -594,6 +626,71 @@ export default function AdminPatientsPage() {
           </table>
         </div>
       </div>
+
+      {/* Appointment Date Modal */}
+      {appointmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-6">
+            {/* Header */}
+            <div className="space-y-2">
+              <div className="text-2xl font-bold text-gray-900">
+                {appointmentModal.type === 'opd' ? '📅 Schedule OPD Appointment' : '🏥 Confirm IPD Admission'}
+              </div>
+              <div className="text-sm text-gray-600">
+                Patient: <span className="font-semibold">{appointmentModal.patientName}</span>
+              </div>
+              <div className="text-xs text-gray-500">
+                {appointmentModal.type === 'opd'
+                  ? 'Select the date and time for the OPD appointment'
+                  : 'Select the date and time for IPD admission confirmation'}
+              </div>
+            </div>
+
+            {/* Date & Time Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 block">
+                {appointmentModal.type === 'opd' ? 'OPD Appointment Date & Time' : 'IPD Admission Date & Time'}
+              </label>
+              <input
+                type="datetime-local"
+                value={appointmentDateTime}
+                onChange={e => setAppointmentDateTime(e.target.value)}
+                className="w-full border-2 border-indigo-300 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none bg-white transition-colors"
+              />
+              {appointmentDateTime && (
+                <div className="text-xs text-gray-500 mt-2">
+                  Selected: {new Date(appointmentDateTime).toLocaleString('en-IN', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setAppointmentModal(null);
+                  setAppointmentDateTime('');
+                }}
+                className="flex-1 px-4 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold text-sm transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={confirmAppointmentDate}
+                disabled={!appointmentDateTime}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm transition-colors">
+                {appointmentModal.type === 'opd' ? '✓ Schedule OPD' : '✓ Confirm IPD'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -110,6 +110,8 @@ type Action =
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
   | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
   | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog }
+  | { type: 'SET_OPD_APPOINTMENT_DATE'; patientId: number; opdScheduledAt: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'SET_IPD_CONFIRMATION_DATE'; patientId: number; ipdConfirmedAt: string; conversionDays?: number; opdToIpdAt?: string; notification: AgentNotification; log: ActivityLog }
   | { type: 'VERIFY_EMAIL'; agentId: string; email: string }
   | { type: 'VERIFY_PHONE'; agentId: string }
   | { type: 'SUBMIT_KYC'; agentId: string; kycRequest: KYCRequest; adminNotif: AdminNotification; log: ActivityLog }
@@ -288,6 +290,30 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
+    case 'SET_OPD_APPOINTMENT_DATE':
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, opdScheduledAt: action.opdScheduledAt }
+            : p
+        ),
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'SET_IPD_CONFIRMATION_DATE':
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, ipdConfirmedAt: action.ipdConfirmedAt, conversionDays: action.conversionDays, opdToIpdAt: action.opdToIpdAt }
+            : p
+        ),
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
     case 'ADD_HOSPITAL':
       return { ...state, hospitals: [...state.hospitals, action.hospital] };
 
@@ -439,6 +465,8 @@ export interface StoreContextType extends AppState {
   markAdminNotificationRead(id: number): void;
   updatePatientStatus(patientId: number, newStatus: string): void;
   setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
+  setOPDAppointmentDate(patientId: number, dateTime: string): void;
+  setIPDConfirmationDate(patientId: number, dateTime: string): void;
   verifyEmail(agentId: string, email: string): void;
   verifyPhone(agentId: string): void;
   submitKYC(agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string): void;
@@ -782,6 +810,60 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const setOPDAppointmentDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+    dispatch({
+      type: 'SET_OPD_APPOINTMENT_DATE',
+      patientId, opdScheduledAt: dateTime,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'appointment',
+        title: '📅 OPD Appointment Scheduled',
+        body: `Your OPD appointment for ${patient.name} has been scheduled. Please contact the hospital to confirm.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'opd_scheduled',
+        title: 'OPD Appointment Scheduled',
+        detail: `${patient.name} (${patient.agentName}) — ${new Date(dateTime).toLocaleString('en-IN')}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const setIPDConfirmationDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    // Calculate OPD→IPD conversion metrics if OPD was scheduled
+    let conversionDays: number | undefined;
+    let opdToIpdAt: string | undefined;
+
+    if (patient.opdScheduledAt) {
+      const opdDate = new Date(patient.opdScheduledAt);
+      const ipdDate = new Date(dateTime);
+      conversionDays = Math.ceil((ipdDate.getTime() - opdDate.getTime()) / (1000 * 60 * 60 * 24));
+      opdToIpdAt = new Date().toISOString(); // Conversion happens now
+    }
+
+    dispatch({
+      type: 'SET_IPD_CONFIRMATION_DATE',
+      patientId, ipdConfirmedAt: dateTime, conversionDays, opdToIpdAt,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'appointment',
+        title: '🏥 IPD Admission Confirmed',
+        body: `IPD admission confirmed for ${patient.name}. Please ensure all documents are ready.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'ipd_confirmed',
+        title: 'IPD Admission Confirmed',
+        detail: `${patient.name} (${patient.agentName}) — ${new Date(dateTime).toLocaleString('en-IN')}${conversionDays ? ` (${conversionDays} days from OPD)` : ''}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   // ── Computed ──────────────────────────────────────────────────────────────────
 
   const myPatients        = state.patients.filter(p => p.agentId === state.currentAgentId);
@@ -878,7 +960,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, setMOP,
+      markAdminNotificationRead, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate,
       verifyEmail, verifyPhone, submitKYC, approveKYC, rejectKYC,
       adminUnreadCount,
     }}>
