@@ -108,13 +108,14 @@ export default function AdminPatientsPage() {
   const confirmMOP = (patientId: number, patientName: string) => {
     const { mop, ticketSize, implantCost, pharmacyCost, labCost, discount, otherDeductions } = mopForm;
     setMOP(patientId, mop, ticketSize, implantCost, pharmacyCost, labCost, discount, otherDeductions);
+    // Capture preview values before closing the panel (previewShareable / previewComm are
+    // computed at render time from mopForm, so they are always in sync with what the admin saw)
+    const confirmedShareable = previewShareable;
+    const confirmedComm      = previewComm;
+    const confirmedDate      = previewDate;
     setMopPatientId(null);
-    const totalDed  = implantCost + pharmacyCost + labCost + discount + otherDeductions;
-    const shareable = Math.max(0, ticketSize - totalDed);
-    const patient   = patients.find(p => p.id === patientId)!;
-    const comm      = Math.round(shareable * patient.commPct / 100);
-    const cfg       = MOP_CONFIG[mop];
-    showToast(`💳 MOP set — ${cfg.icon} ${cfg.label} · Net ₹${shareable.toLocaleString('en-IN')} · Commission ₹${comm.toLocaleString('en-IN')} · Due ${calcExpectedPaymentDate(mop)}`);
+    const cfg = MOP_CONFIG[mop];
+    showToast(`💳 MOP set — ${cfg.icon} ${cfg.label} · Share ₹${confirmedShareable.toLocaleString('en-IN')} · Commission ₹${confirmedComm.toLocaleString('en-IN')} · Due ${confirmedDate}`);
   };
 
   // Live preview while MOP panel is open

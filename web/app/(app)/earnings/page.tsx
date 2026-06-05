@@ -173,26 +173,56 @@ export default function EarningsPage() {
                     {c.mop && c.ticketSize ? (
                       <div className="mx-5 mb-4 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
                         <div className="px-4 py-2 bg-gray-100/50 border-b border-gray-100 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-                          💰 Ticket Breakdown
+                          💰 Bill Breakdown
                         </div>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 divide-x divide-gray-100">
-                          <div className="px-4 py-3">
-                            <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Total Ticket</div>
-                            <div className="text-sm font-bold text-gray-900">{fmt(c.ticketSize)}</div>
+                        <div className="px-4 py-3 space-y-1.5 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Total Bill</span>
+                            <span className="font-bold text-gray-900">{fmt(c.ticketSize)}</span>
                           </div>
                           {(c.implantCost ?? 0) > 0 && (
-                            <div className="px-4 py-3">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Implants (excl.)</div>
-                              <div className="text-sm font-bold text-red-500">− {fmt(c.implantCost!)}</div>
+                            <div className="flex justify-between text-red-500">
+                              <span>− Implants / Equipment</span>
+                              <span className="font-semibold">− {fmt(c.implantCost!)}</span>
                             </div>
                           )}
-                          <div className="px-4 py-3">
-                            <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Your Share On</div>
-                            <div className="text-sm font-bold text-indigo-700">{fmt(c.shareableAmount!)}</div>
+                          {(c.pharmacyCost ?? 0) > 0 && (
+                            <div className="flex justify-between text-red-500">
+                              <span>− Pharmacy / Medicines</span>
+                              <span className="font-semibold">− {fmt(c.pharmacyCost!)}</span>
+                            </div>
+                          )}
+                          {(c.labCost ?? 0) > 0 && (
+                            <div className="flex justify-between text-red-500">
+                              <span>− Lab & Diagnostics</span>
+                              <span className="font-semibold">− {fmt(c.labCost!)}</span>
+                            </div>
+                          )}
+                          {(c.discount ?? 0) > 0 && (
+                            <div className="flex justify-between text-amber-600">
+                              <span>− Hospital Discount</span>
+                              <span className="font-semibold">− {fmt(c.discount!)}</span>
+                            </div>
+                          )}
+                          {(c.otherDeductions ?? 0) > 0 && (
+                            <div className="flex justify-between text-gray-500">
+                              <span>− Other Deductions</span>
+                              <span className="font-semibold">− {fmt(c.otherDeductions!)}</span>
+                            </div>
+                          )}
+                          {(c.totalDeductions ?? 0) > 0 && (
+                            <div className="flex justify-between border-t border-dashed border-red-100 pt-1.5 text-red-500">
+                              <span className="font-medium">Total Deductions</span>
+                              <span className="font-bold">− {fmt(c.totalDeductions!)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t-2 border-indigo-100 pt-1.5">
+                            <span className="font-bold text-gray-800">Shareable Amount</span>
+                            <span className="font-bold text-indigo-700">{fmt(c.shareableAmount!)}</span>
                           </div>
-                          <div className="px-4 py-3">
-                            <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Commission</div>
-                            <div className="text-sm font-bold text-emerald-600">{fmt(c.amount)}</div>
+                          <div className="flex justify-between pt-0.5">
+                            <span className="font-bold text-gray-800">Your Commission</span>
+                            <span className="font-bold text-emerald-600">{fmt(c.amount)}</span>
                           </div>
                         </div>
                       </div>
@@ -271,10 +301,53 @@ export default function EarningsPage() {
                       <div className="text-2xl font-bold text-emerald-600 flex-shrink-0">{fmt(c.amount)}</div>
                     </div>
                     {c.mop && c.ticketSize ? (
-                      <div className="mx-5 mb-4 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 grid grid-cols-3 gap-3 text-xs">
-                        <div><div className="text-gray-400 mb-0.5">Ticket Size</div><div className="font-semibold text-gray-900">{fmt(c.ticketSize)}</div></div>
-                        {(c.implantCost ?? 0) > 0 && <div><div className="text-gray-400 mb-0.5">Implants excl.</div><div className="font-semibold text-red-500">− {fmt(c.implantCost!)}</div></div>}
-                        <div><div className="text-gray-400 mb-0.5">Paid On</div><div className="font-semibold text-emerald-600">{fmt(c.shareableAmount!)}</div></div>
+                      <div className="mx-5 mb-4 rounded-xl border border-emerald-100 bg-emerald-50/40 overflow-hidden">
+                        <div className="px-4 py-3 space-y-1.5 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Total Bill</span>
+                            <span className="font-bold text-gray-900">{fmt(c.ticketSize)}</span>
+                          </div>
+                          {(c.implantCost ?? 0) > 0 && (
+                            <div className="flex justify-between text-red-500">
+                              <span>− Implants / Equipment</span>
+                              <span className="font-semibold">− {fmt(c.implantCost!)}</span>
+                            </div>
+                          )}
+                          {(c.pharmacyCost ?? 0) > 0 && (
+                            <div className="flex justify-between text-red-500">
+                              <span>− Pharmacy / Medicines</span>
+                              <span className="font-semibold">− {fmt(c.pharmacyCost!)}</span>
+                            </div>
+                          )}
+                          {(c.labCost ?? 0) > 0 && (
+                            <div className="flex justify-between text-red-500">
+                              <span>− Lab & Diagnostics</span>
+                              <span className="font-semibold">− {fmt(c.labCost!)}</span>
+                            </div>
+                          )}
+                          {(c.discount ?? 0) > 0 && (
+                            <div className="flex justify-between text-amber-600">
+                              <span>− Hospital Discount</span>
+                              <span className="font-semibold">− {fmt(c.discount!)}</span>
+                            </div>
+                          )}
+                          {(c.otherDeductions ?? 0) > 0 && (
+                            <div className="flex justify-between text-gray-500">
+                              <span>− Other Deductions</span>
+                              <span className="font-semibold">− {fmt(c.otherDeductions!)}</span>
+                            </div>
+                          )}
+                          {(c.totalDeductions ?? 0) > 0 && (
+                            <div className="flex justify-between border-t border-dashed border-emerald-200 pt-1.5 text-red-500">
+                              <span className="font-medium">Total Deductions</span>
+                              <span className="font-bold">− {fmt(c.totalDeductions!)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t-2 border-emerald-200 pt-1.5">
+                            <span className="font-bold text-gray-700">Paid On (Shareable)</span>
+                            <span className="font-bold text-emerald-600">{fmt(c.shareableAmount!)}</span>
+                          </div>
+                        </div>
                       </div>
                     ) : null}
                   </div>
