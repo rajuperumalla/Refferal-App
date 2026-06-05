@@ -225,19 +225,19 @@ export default function ProfilePage() {
       )}
 
       {/* Profile hero */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
         {/* Banner */}
-        <div className="h-24 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
+        <div className="h-32 relative" style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, white, transparent)' }} />
         </div>
         {/* Avatar row — pulled up to overlap banner */}
-        <div className="px-5 pb-5">
+        <div className="relative px-6 pb-6">
           {/* Avatar + edit button */}
-          <div className="-mt-10 mb-3 flex items-end justify-between">
-            <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-white shadow-md flex-shrink-0">
+          <div className="flex items-end justify-between">
+            <div className="absolute -top-12 left-6 z-20 w-28 h-28 rounded-3xl bg-blue-600 flex items-center justify-center text-5xl font-bold text-white border-4 border-white shadow-lg flex-shrink-0 hover:shadow-xl transition-shadow">
               {agent.name[0]}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 mt-12">
+            <div className="flex flex-wrap justify-end gap-2 w-full pt-2">
               <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">ID: {agent.id}</span>
               <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">{agent.commissionRate}% Commission</span>
               {isSuspended && <span className="bg-red-100 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full">Suspended</span>}
@@ -245,9 +245,9 @@ export default function ProfilePage() {
             </div>
           </div>
           {/* Name / email */}
-          <div>
-            <div className="text-xl font-bold text-gray-900">{agent.name}</div>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <div className="pt-12">
+            <div className="text-2xl font-bold text-gray-900">{agent.name}</div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="text-sm text-gray-500 truncate">{agent.email || 'No email set'}</span>
               {agent.email && (
                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${agent.emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
