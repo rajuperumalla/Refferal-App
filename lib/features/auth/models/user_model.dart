@@ -45,15 +45,41 @@ class UserModel {
     };
   }
 
-  static UserModel get mock => const UserModel(
-        id: 'u001',
-        name: 'Rajesh Sharma',
-        phone: '+919876543210',
-        email: 'rajesh@example.com',
-        agentId: 'AG-HYD-001',
-        commissionRate: 4.0,
-        city: 'Hyderabad',
-      );
+  factory UserModel.fromFirestore(String uid, Map<String, dynamic> data) {
+    return UserModel(
+      id: uid,
+      name: data['name'] ?? '',
+      phone: data['phone'] ?? '',
+      email: data['email'],
+      agentId: data['agentId'] ?? uid,
+      commissionRate: (data['commissionRate'] ?? 4.0).toDouble(),
+      profileImage: data['profileImage'],
+      city: data['city'],
+    );
+  }
 
-  String get firstName => name.split(' ').first;
+  // Called when a new Firebase user signs in for the first time
+  factory UserModel.newFromUid(String uid, String phone) {
+    return UserModel(
+      id: uid,
+      name: '',
+      phone: phone,
+      agentId: uid,
+      commissionRate: 4.0,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'phone': phone,
+      if (email != null) 'email': email,
+      'agentId': agentId,
+      'commissionRate': commissionRate,
+      if (profileImage != null) 'profileImage': profileImage,
+      if (city != null) 'city': city,
+    };
+  }
+
+  String get firstName => name.isNotEmpty ? name.split(' ').first : 'Agent';
 }

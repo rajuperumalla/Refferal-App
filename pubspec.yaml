@@ -52,6 +52,8 @@ dependencies:
   connectivity_plus: ^6.0.3
   local_auth: ^2.2.0
   firebase_core: ^3.3.0
+  firebase_auth: ^5.1.0
+  cloud_firestore: ^5.2.0
   firebase_messaging: ^15.1.0
 
   # Animations
