@@ -13,6 +13,7 @@ import 'features/patients/screens/add_patient_screen.dart';
 import 'features/patients/screens/patient_details_screen.dart';
 import 'features/patients/screens/patients_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/manager/screens/manager_home_screen.dart';
 import 'shared/widgets/main_shell.dart';
 
 // Router provider
@@ -25,10 +26,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isLoggedIn = authState.isAuthenticated;
       final isOnAuth = state.matchedLocation == '/login' ||
           state.matchedLocation == '/otp';
+      final loc = state.matchedLocation;
 
-      if (!isLoggedIn && !isOnAuth && state.matchedLocation != '/') {
+      if (!isLoggedIn && !isOnAuth && loc != '/') {
         return '/login';
       }
+
+      // After login, redirect to correct home based on role
+      if (isLoggedIn && (loc == '/login' || loc == '/')) {
+        final role = authState.user?.role ?? 'agent';
+        if (role == 'manager') return '/manager-home';
+        return '/home';
+      }
+
+      // Block agents from manager routes and vice-versa
+      if (isLoggedIn) {
+        final role = authState.user?.role ?? 'agent';
+        if (loc.startsWith('/manager') && role != 'manager') return '/home';
+      }
+
       return null;
     },
     routes: [
@@ -79,6 +95,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => const ProfileScreen(),
           ),
         ],
+      ),
+
+      // Manager home (team overview)
+      GoRoute(
+        path: '/manager-home',
+        builder: (_, __) => const ManagerHomeScreen(),
       ),
 
       // Standalone screens (no bottom nav)

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import {
   AdminAgent, AdminPatient, AdminCommission, AdminHospital, ActivityLog,
   ADMIN_AGENTS, ADMIN_PATIENTS, ADMIN_COMMISSIONS, ADMIN_HOSPITALS,
-  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate, KYCRequest,
+  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate, KYCRequest, UserRole,
 } from './admin-data';
 import { Notification } from './types';
 import { NOTIFICATIONS, MONTHLY_EARNINGS } from './data';
@@ -80,6 +80,7 @@ interface AppState {
   agentMonthlyEarnings: MonthlyEarning[];
   settings: AppSettings;
   currentAgentId: string;
+  currentRole: UserRole;
   bankDetails: BankDetails;
   bankVerificationRequests: BankVerificationRequest[];
   adminNotifications: AdminNotification[];
@@ -88,6 +89,7 @@ interface AppState {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 type Action =
+  | { type: 'SET_CURRENT_USER'; agentId: string; role: UserRole }
   | { type: 'ADD_PATIENT'; patient: AdminPatient; commission: AdminCommission; notification: AgentNotification; log: ActivityLog }
   | { type: 'APPROVE_COMMISSION'; id: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'REJECT_COMMISSION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
@@ -123,6 +125,9 @@ function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   switch (action.type) {
+    case 'SET_CURRENT_USER':
+      return { ...state, currentAgentId: action.agentId, currentRole: action.role };
+
     case 'ADD_PATIENT':
       return {
         ...state,
@@ -416,6 +421,7 @@ function reducer(state: AppState, action: Action): AppState {
 // ─── Initial state ─────────────────────────────────────────────────────────────
 
 const CURRENT_AGENT_ID = 'AG-HYD-001';
+const CURRENT_ROLE: UserRole = 'agent';
 
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'MediReferral',
@@ -452,6 +458,7 @@ const INITIAL_STATE: AppState = {
   agentMonthlyEarnings: MONTHLY_EARNINGS,
   settings: DEFAULT_SETTINGS,
   currentAgentId: CURRENT_AGENT_ID,
+  currentRole: CURRENT_ROLE,
   bankDetails: DEFAULT_BANK_DETAILS,
   bankVerificationRequests: [],
   adminNotifications: [],
@@ -468,6 +475,11 @@ export interface StoreContextType extends AppState {
   myPendingAmount: number;
   myApprovedAmount: number;
   kycRequests: KYCRequest[];
+  // Manager-scoped data
+  myTeamAgents: AdminAgent[];
+  myTeamPatients: AdminPatient[];
+  myTeamCommissions: AdminCommission[];
+  setCurrentUser(agentId: string, role: UserRole): void;
 
   addPatient(data: {
     name: string; phone: string; age: number; gender: 'M' | 'F';
@@ -929,9 +941,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const myNotifications   = state.notifications.filter(n => n.agentId === state.currentAgentId);
   const unreadCount       = myNotifications.filter(n => !n.read).length;
   const adminUnreadCount  = state.adminNotifications.filter(n => !n.read).length;
-  // Live pending & approved amounts — computed from actual commissions (not static agent field)
   const myPendingAmount   = myCommissions.filter(c => c.status === 'pending_approval').reduce((s, c) => s + c.amount, 0);
   const myApprovedAmount  = myCommissions.filter(c => c.status === 'approved').reduce((s, c) => s + c.amount, 0);
+
+  // Manager-scoped: agents belonging to this manager, and their patients/commissions
+  const myTeamAgents      = state.agents.filter(a => a.role === 'agent' && a.managerId === state.currentAgentId);
+  const teamAgentIds      = myTeamAgents.map(a => a.id);
+  const myTeamPatients    = state.patients.filter(p => teamAgentIds.includes(p.agentId));
+  const myTeamCommissions = state.commissions.filter(c => teamAgentIds.includes(c.agentId));
+
+  const setCurrentUser = (agentId: string, role: UserRole) =>
+    dispatch({ type: 'SET_CURRENT_USER', agentId, role });
 
   const verifyEmail = (agentId: string, email: string) =>
     dispatch({ type: 'VERIFY_EMAIL', agentId, email });
@@ -1014,6 +1034,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     <StoreCtx.Provider value={{
       ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount, myPendingAmount, myApprovedAmount,
       kycRequests: state.kycRequests,
+      myTeamAgents, myTeamPatients, myTeamCommissions, setCurrentUser,
       addPatient, approveCommission, rejectCommission, markCommissionPaid, approveAllCommissions,
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,

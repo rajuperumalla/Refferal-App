@@ -7,6 +7,8 @@ class UserModel {
   final double commissionRate;
   final String? profileImage;
   final String? city;
+  final String role;       // 'agent' | 'manager' | 'admin'
+  final String? managerId; // set for agents — which manager they report to
 
   const UserModel({
     required this.id,
@@ -17,7 +19,13 @@ class UserModel {
     required this.commissionRate,
     this.profileImage,
     this.city,
+    this.role = 'agent',
+    this.managerId,
   });
+
+  bool get isAgent   => role == 'agent';
+  bool get isManager => role == 'manager';
+  bool get isAdmin   => role == 'admin';
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
@@ -29,6 +37,8 @@ class UserModel {
       commissionRate: (json['commission_rate'] ?? 4.0).toDouble(),
       profileImage: json['profile_image'],
       city: json['city'],
+      role: json['role'] ?? 'agent',
+      managerId: json['manager_id'],
     );
   }
 
@@ -42,6 +52,8 @@ class UserModel {
       'commission_rate': commissionRate,
       'profile_image': profileImage,
       'city': city,
+      'role': role,
+      'manager_id': managerId,
     };
   }
 
@@ -55,10 +67,11 @@ class UserModel {
       commissionRate: (data['commissionRate'] ?? 4.0).toDouble(),
       profileImage: data['profileImage'],
       city: data['city'],
+      role: data['role'] ?? 'agent',
+      managerId: data['managerId'],
     );
   }
 
-  // Called when a new Firebase user signs in for the first time
   factory UserModel.newFromUid(String uid, String phone) {
     return UserModel(
       id: uid,
@@ -66,6 +79,7 @@ class UserModel {
       phone: phone,
       agentId: uid,
       commissionRate: 4.0,
+      role: 'agent',
     );
   }
 
@@ -78,6 +92,8 @@ class UserModel {
       'commissionRate': commissionRate,
       if (profileImage != null) 'profileImage': profileImage,
       if (city != null) 'city': city,
+      'role': role,
+      if (managerId != null) 'managerId': managerId,
     };
   }
 

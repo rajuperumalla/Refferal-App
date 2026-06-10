@@ -144,7 +144,7 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
     const saved     = { ...form, phone: normPhone };
     onSave(existing
       ? { ...existing, ...saved, phoneVerified: existing.phoneVerified }
-      : { ...saved, id: previewId, phoneVerified: true, totalLeads: 0, totalEarned: 0, thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '', lastActive: 'Never' }
+      : { ...saved, id: previewId, role: 'agent' as const, phoneVerified: true, totalLeads: 0, totalEarned: 0, thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '', lastActive: 'Never' }
     );
   };
 
@@ -347,24 +347,30 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
 
 export default function AgentsPage() {
   const { agents, createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent } = useStore();
+  const [tab,       setTab]       = useState<'agents' | 'managers'>('agents');
   const [filter,    setFilter]    = useState<FilterStatus>('all');
   const [search,    setSearch]    = useState('');
   const [modal,     setModal]     = useState<'create' | 'edit' | null>(null);
   const [editing,   setEditing]   = useState<AdminAgent | undefined>();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const filtered = agents
+  // Separate agents and managers
+  const onlyAgents   = agents.filter(a => a.role === 'agent' || !a.role);
+  const onlyManagers = agents.filter(a => a.role === 'manager');
+  const viewList     = tab === 'managers' ? onlyManagers : onlyAgents;
+
+  const filtered = viewList
     .filter(a => filter === 'all' || a.status === filter)
     .filter(a => !search || a.name.toLowerCase().includes(search.toLowerCase()) || a.id.toLowerCase().includes(search.toLowerCase()) || a.city.toLowerCase().includes(search.toLowerCase()) || (a.email ?? '').toLowerCase().includes(search.toLowerCase()));
 
-  const statusCounts: Record<string, number> = { all: agents.length };
-  agents.forEach(a => { statusCounts[a.status] = (statusCounts[a.status] ?? 0) + 1; });
+  const statusCounts: Record<string, number> = { all: viewList.length };
+  viewList.forEach(a => { statusCounts[a.status] = (statusCounts[a.status] ?? 0) + 1; });
 
-  const agentCount = (city: string) => agents.filter(a => a.city === city).length;
+  const agentCount = (city: string) => agents.filter(a => a.city === city && (a.role === 'agent' || !a.role)).length;
 
   const handleSave = (agent: AdminAgent) => {
     if (editing) updateAgent(agent);
-    else createAgent(agent);
+    else createAgent({ ...agent, role: tab === 'managers' ? 'manager' : 'agent' });
     setModal(null); setEditing(undefined);
   };
 
@@ -378,10 +384,21 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Role tabs */}
+      <div className="flex items-center gap-2">
+        {([['agents','👥 Agents', onlyAgents.length], ['managers','🧑‍💼 Managers', onlyManagers.length]] as const).map(([t, label, count]) => (
+          <button key={t} onClick={() => { setTab(t); setFilter('all'); setSearch(''); }}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${tab === t ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-indigo-300'}`}>
+            {label}
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === t ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Agents',       value: agents.length,                  color: 'text-gray-900' },
+          { label: tab === 'managers' ? 'Total Managers' : 'Total Agents', value: viewList.length,               color: 'text-gray-900' },
           { label: 'Active',             value: statusCounts.active ?? 0,       color: 'text-emerald-600' },
           { label: 'Pending Approval',   value: statusCounts.pending ?? 0,      color: 'text-amber-600' },
           { label: 'Suspended',          value: statusCounts.suspended ?? 0,    color: 'text-red-600' },
@@ -398,12 +415,12 @@ export default function AgentsPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, ID, city or email…"
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${tab} by name, ID, city or email…`}
               className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
           <button onClick={() => { setEditing(undefined); setModal('create'); }}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap">
-            + Create Agent
+            + {tab === 'managers' ? 'Create Manager' : 'Create Agent'}
           </button>
         </div>
         <div className="flex gap-2 mt-3 flex-wrap">
@@ -421,57 +438,81 @@ export default function AgentsPage() {
       {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 border-b border-gray-100 text-sm text-gray-500">
-          Showing <strong className="text-gray-900">{filtered.length}</strong> of {agents.length} agents
+          Showing <strong className="text-gray-900">{filtered.length}</strong> of {viewList.length} {tab}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                {['Agent','ID','City','Commission','Leads','This Month','Conv.%','Status','Last Active','KYC','Actions'].map(h => (
+                {(tab === 'agents'
+                  ? ['Agent','ID','City','Manager','Commission','Leads','This Month','Conv.%','Status','Last Active','KYC','Actions']
+                  : ['Manager','ID','City','Team Agents','Status','Last Active','Actions']
+                ).map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-5 py-16 text-center text-gray-400"><div className="text-4xl mb-2">👥</div><div className="font-medium">No agents found</div></td></tr>
+                <tr><td colSpan={12} className="px-5 py-16 text-center text-gray-400"><div className="text-4xl mb-2">👥</div><div className="font-medium">No {tab} found</div></td></tr>
               ) : filtered.map(a => {
-                const badge = STATUS_BADGE[a.status];
+                const badge   = STATUS_BADGE[a.status];
+                const manager = a.managerId ? agents.find(m => m.id === a.managerId) : undefined;
+                const teamSize = tab === 'managers' ? agents.filter(x => x.managerId === a.id).length : 0;
                 return (
                   <tr key={a.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">{a.name[0]}</div>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${tab === 'managers' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>{a.name[0]}</div>
                         <div>
-                          <div className="font-semibold text-gray-900">{a.name}</div>
+                          <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                            {a.name}
+                            {tab === 'managers' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">MGR</span>}
+                          </div>
                           <div className="text-xs text-gray-400">{a.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3.5"><code className="text-xs bg-gray-100 px-2 py-0.5 rounded-md font-mono">{a.id}</code></td>
                     <td className="px-5 py-3.5 text-gray-600">{a.city}</td>
-                    <td className="px-5 py-3.5 font-semibold text-indigo-600">{a.commissionRate}%</td>
-                    <td className="px-5 py-3.5 text-gray-700">{a.totalLeads}</td>
-                    <td className="px-5 py-3.5 font-semibold text-emerald-600">{a.thisMonth > 0 ? fmtINR(a.thisMonth) : '—'}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`font-bold text-sm ${a.conversionRate >= 65 ? 'text-emerald-600' : a.conversionRate >= 40 ? 'text-amber-600' : 'text-gray-400'}`}>
-                        {a.conversionRate > 0 ? `${a.conversionRate}%` : '—'}
-                      </span>
-                    </td>
+                    {tab === 'agents' ? (
+                      <td className="px-5 py-3.5">
+                        {manager
+                          ? <span className="text-xs text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full font-medium">{manager.name}</span>
+                          : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                    ) : (
+                      <td className="px-5 py-3.5">
+                        <span className="text-sm font-semibold text-purple-600">{teamSize}</span>
+                        <span className="text-xs text-gray-400 ml-1">agents</span>
+                      </td>
+                    )}
+                    {tab === 'agents' && <>
+                      <td className="px-5 py-3.5 font-semibold text-indigo-600">{a.commissionRate}%</td>
+                      <td className="px-5 py-3.5 text-gray-700">{a.totalLeads}</td>
+                      <td className="px-5 py-3.5 font-semibold text-emerald-600">{a.thisMonth > 0 ? fmtINR(a.thisMonth) : '—'}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`font-bold text-sm ${a.conversionRate >= 65 ? 'text-emerald-600' : a.conversionRate >= 40 ? 'text-amber-600' : 'text-gray-400'}`}>
+                          {a.conversionRate > 0 ? `${a.conversionRate}%` : '—'}
+                        </span>
+                      </td>
+                    </>}
                     <td className="px-5 py-3.5">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badge.bg} ${badge.color}`}>{badge.label}</span>
                     </td>
                     <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">{a.lastActive}</td>
-                    <td className="px-5 py-3.5">
-                      {a.kycStatus === 'approved'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ KYC</span>}
-                      {a.kycStatus === 'submitted' && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50  text-violet-700  border border-violet-200  whitespace-nowrap">⏳ KYC Pending</span>}
-                      {a.kycStatus === 'rejected'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50    text-red-600    border border-red-200    whitespace-nowrap">❌ KYC Rejected</span>}
-                      {(!a.kycStatus || a.kycStatus === 'not_submitted') && (
-                        a.phoneVerified
-                          ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">📋 KYC Required</span>
-                          : <span className="text-[10px] text-gray-300 whitespace-nowrap">—</span>
-                      )}
-                    </td>
+                    {tab === 'agents' && (
+                      <td className="px-5 py-3.5">
+                        {a.kycStatus === 'approved'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ KYC</span>}
+                        {a.kycStatus === 'submitted' && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-50  text-violet-700  border border-violet-200  whitespace-nowrap">⏳ KYC Pending</span>}
+                        {a.kycStatus === 'rejected'  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50    text-red-600    border border-red-200    whitespace-nowrap">❌ KYC Rejected</span>}
+                        {(!a.kycStatus || a.kycStatus === 'not_submitted') && (
+                          a.phoneVerified
+                            ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">📋 KYC Required</span>
+                            : <span className="text-[10px] text-gray-300 whitespace-nowrap">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => { setEditing(a); setModal('edit'); }} className="text-xs font-medium text-indigo-600 hover:bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors">Edit</button>
