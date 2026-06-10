@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediConnect – App Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1e1e2e;
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 32px 16px;
+    gap: 40px;
+  }
+  h1 { color: #94a3b8; font-size: 14px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* Phone shell */
+  .phone {
+    width: 360px;
+    height: 720px;
+    background: #f3f4f6;
+    border-radius: 36px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), inset 0 0 0 2px #374151;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone-label {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    margin-top: -28px;
+    margin-bottom: 8px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    background: #2563eb;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
+  .status-bar span { color: white; font-size: 10px; font-weight: 600; }
+
+  /* AppBar */
+  .app-bar {
+    background: #2563eb;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    padding: 0 16px;
+  }
+  .app-bar .title { color: white; font-size: 18px; font-weight: 700; }
+  .app-bar .actions { position: absolute; right: 12px; display: flex; gap: 4px; }
+  .app-bar .actions .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .app-bar .actions .icon-btn:hover { background: rgba(255,255,255,0.15); }
+  .app-bar .actions .icon-btn svg { fill: white; }
+
+  /* Screen content */
+  .screen { flex: 1; overflow-y: auto; }
+  .screen::-webkit-scrollbar { width: 3px; }
+  .screen::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  /* ---- LOGIN SCREEN ---- */
+  .login-screen {
+    padding: 40px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    min-height: 100%;
+  }
+  .login-icon {
+    width: 80px; height: 80px;
+    margin: 0 auto 24px;
+    background: #eff6ff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-icon svg { fill: #2563eb; }
+  .login-title {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 6px;
+  }
+  .login-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 40px;
+  }
+  .input-group { margin-bottom: 16px; position: relative; }
+  .input-group svg {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    fill: #9ca3af;
+  }
+  .input-group input {
+    width: 100%;
+    padding: 14px 16px 14px 44px;
+    background: white;
+    border: 1.5px solid #d1d5db;
+    border-radius: 12px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    color: #111827;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input::placeholder { color: #9ca3af; }
+  .input-group input:focus { border-color: #2563eb; }
+  .input-group label {
+    position: absolute;
+    left: 44px;
+    top: 14px;
+    font-size: 13px;
+    color: #6b7280;
+    pointer-events: none;
+    transition: 0.15s;
+  }
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-text {
+    background: none; border: none;
+    color: #2563eb;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: block;
+    margin: 14px auto 0;
+  }
+
+  /* ---- DASHBOARD SCREEN ---- */
+  .dashboard-body {
+    padding: 16px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 16px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+    display: flex;
+    flex-direction: column;
+    min-height: 100px;
+  }
+  .stat-icon-wrap {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: auto;
+  }
+  .stat-icon-wrap svg { width: 18px; height: 18px; }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1f2937;
+    margin-top: 8px;
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+  .section-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .btn-view-all {
+    background: none; border: none;
+    color: #2563eb;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .case-card {
+    background: white;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .case-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #e0e5ec;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .case-avatar svg { fill: #2563eb; }
+  .case-info { flex: 1; }
+  .case-id { font-size: 13px; font-weight: 700; color: #111827; }
+  .case-meta { font-size: 11px; color: #6b7280; margin-top: 2px; line-height: 1.5; }
+  .case-chevron { color: #d1d5db; }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    bottom: 20px;
+    right: 16px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 28px;
+    padding: 14px 20px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .fab:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(37,99,235,0.5); }
+  .fab svg { fill: white; }
+
+  /* Nav switcher */
+  .nav-hint {
+    color: #94a3b8;
+    font-size: 11px;
+    text-align: center;
+    margin-top: -8px;
+  }
+  .screen-tabs {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .screen-tab {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: 1.5px solid #374151;
+    background: none;
+    color: #64748b;
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .screen-tab.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: white;
+  }
+
+  /* ---- ADMIN DASHBOARD ---- */
+  .admin-shell {
+    width: 1100px;
+    max-width: 98vw;
+    height: 700px;
+    background: #f1f5f9;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+  }
+  /* Admin top bar */
+  .admin-topbar {
+    background: #1e293b;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .admin-topbar .brand { color: white; font-size: 16px; font-weight: 700; }
+  .admin-topbar .brand span { color: #38bdf8; }
+  .admin-topbar .role-badge {
+    background: #dc2626;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    letter-spacing: 1px;
+  }
+  .admin-topbar .spacer { flex: 1; }
+  .admin-topbar .topbar-user {
+    display: flex; align-items: center; gap: 8px;
+    color: #94a3b8; font-size: 13px;
+  }
+  .admin-topbar .topbar-user .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #2563eb;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 13px; font-weight: 700;
+  }
+  /* Admin body = sidebar + content */
+  .admin-body { display: flex; flex: 1; overflow: hidden; }
+  /* Sidebar */
+  .admin-sidebar {
+    width: 200px;
+    background: #1e293b;
+    flex-shrink: 0;
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+  }
+  .sidebar-section {
+    color: #475569;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 16px 4px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .sidebar-item:hover { background: #273449; color: #e2e8f0; }
+  .sidebar-item.active { background: #1d3461; color: #60a5fa; border-left-color: #2563eb; }
+  .sidebar-item svg { fill: currentColor; flex-shrink: 0; }
+  .sidebar-badge {
+    margin-left: auto;
+    background: #dc2626;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 5px;
+  }
+  /* Main content */
+  .admin-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .admin-main::-webkit-scrollbar { width: 4px; }
+  .admin-main::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .admin-page-title {
+    font-size: 20px; font-weight: 700; color: #0f172a;
+  }
+  .admin-page-subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
+  /* KPI Grid */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .kpi-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .kpi-top { display: flex; align-items: center; justify-content: space-between; }
+  .kpi-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .kpi-icon svg { width: 20px; height: 20px; }
+  .kpi-trend {
+    font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .kpi-trend.up { color: #10b981; }
+  .kpi-trend.down { color: #ef4444; }
+  .kpi-value { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1; }
+  .kpi-label { font-size: 12px; color: #64748b; font-weight: 500; }
+  /* Two column section */
+  .admin-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+  .admin-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .admin-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .admin-card-title { font-size: 14px; font-weight: 700; color: #0f172a; }
+  .admin-card-action {
+    font-size: 12px; color: #2563eb; font-weight: 500;
+    background: none; border: none; cursor: pointer; font-family: 'Poppins', sans-serif;
+  }
+  /* Table */
+  .admin-table { width: 100%; border-collapse: collapse; }
+  .admin-table th {
+    text-align: left;
+    font-size: 11px; font-weight: 600; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .admin-table td {
+    padding: 10px 8px;
+    font-size: 12px; color: #334155;
+    border-bottom: 1px solid #f8fafc;
+    vertical-align: middle;
+  }
+  .admin-table tr:last-child td { border-bottom: none; }
+  .admin-table tr:hover td { background: #f8fafc; }
+  .status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .pill-green { background: #d1fae5; color: #065f46; }
+  .pill-yellow { background: #fef3c7; color: #92400e; }
+  .pill-blue { background: #dbeafe; color: #1e40af; }
+  .pill-red { background: #fee2e2; color: #991b1b; }
+  .pill-gray { background: #f1f5f9; color: #475569; }
+  /* Approval list */
+  .approval-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .approval-item:last-child { border-bottom: none; }
+  .approval-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: white;
+    flex-shrink: 0;
+  }
+  .approval-info { flex: 1; min-width: 0; }
+  .approval-name { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .approval-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
+  .approval-actions { display: flex; gap: 6px; }
+  .btn-approve, .btn-reject {
+    padding: 4px 12px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    border: none; cursor: pointer; font-family: 'Poppins', sans-serif;
+    transition: opacity 0.15s;
+  }
+  .btn-approve { background: #d1fae5; color: #065f46; }
+  .btn-approve:hover { opacity: 0.8; }
+  .btn-reject { background: #fee2e2; color: #991b1b; }
+  .btn-reject:hover { opacity: 0.8; }
+  /* Stats mini bar */
+  .mini-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .mini-bar-label { font-size: 11px; color: #64748b; width: 80px; flex-shrink: 0; }
+  .mini-bar-track { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
+  .mini-bar-fill { height: 100%; border-radius: 3px; }
+  .mini-bar-val { font-size: 11px; font-weight: 700; color: #0f172a; width: 36px; text-align: right; }
+</style>
+</head>
+<body>
+
+<h1>MediConnect — App Preview</h1>
+
+<div style="display:flex;gap:12px;align-items:center;">
+  <button class="screen-tab active" onclick="showScreen('login')">Login Screen</button>
+  <button class="screen-tab" onclick="showScreen('dashboard')">Agent Dashboard</button>
+  <button class="screen-tab" onclick="showScreen('admin')">Admin Dashboard</button>
+</div>
+
+<!-- ===== LOGIN PHONE ===== -->
+<div id="login-phone" style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+  <p class="phone-label">Login Screen</p>
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>●●●  WiFi  🔋</span>
+    </div>
+    <div class="screen login-screen">
+      <div class="login-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" height="40" width="40" viewBox="0 0 24 24"><path d="M12 1C6.48 1 2 5.48 2 11s4.48 10 10 10 10-4.48 10-10S17.52 1 12 1zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 11.9 13 12.5 13 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+      </div>
+      <div class="login-title">Welcome to MediConnect</div>
+      <div class="login-subtitle">Healthcare Referral &amp; Payment Platform</div>
+
+      <div class="input-group">
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>
+        <input type="text" placeholder="Email Address or Phone" />
+      </div>
+      <div class="input-group">
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        <input type="password" placeholder="Password" />
+      </div>
+
+      <button class="btn-primary" onclick="showScreen('dashboard')">Login</button>
+      <button class="btn-text">Forgot Password?</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DASHBOARD PHONE ===== -->
+<div id="dashboard-phone" style="display:none;flex-direction:column;align-items:center;gap:8px;">
+  <p class="phone-label">Agent Dashboard</p>
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>●●●  WiFi  🔋</span>
+    </div>
+    <div class="app-bar">
+      <span class="title">Agent Dashboard</span>
+      <div class="actions">
+        <div class="icon-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        </div>
+        <div class="icon-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="screen dashboard-body" style="padding-bottom: 80px;">
+      <div class="section-title">Overview</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:#eff6ff;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#2563eb;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-4h2V7h-2v5H9l3 3 3-3h-2z"/></svg>
+          </div>
+          <div class="stat-value">12</div>
+          <div class="stat-label">Active Cases</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:#fff7ed;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#f97316;"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+          </div>
+          <div class="stat-value">₹34,500</div>
+          <div class="stat-label">Pending Comm.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:#f0fdf4;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#10b981;"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          </div>
+          <div class="stat-value">3</div>
+          <div class="stat-label">Today's Referrals</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:#faf5ff;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#a855f7;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </div>
+          <div class="stat-value">148</div>
+          <div class="stat-label">Total Referrals</div>
+        </div>
+      </div>
+
+      <div class="section-row">
+        <div class="section-title" style="margin-bottom:0;font-size:18px;">Recent Cases</div>
+        <button class="btn-view-all">View All</button>
+      </div>
+
+      <div class="case-card">
+        <div class="case-avatar"><svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5.5-3.5c1.07 0 1.83.82 1.83 1.67 0 .97-1.02 2.05-3.33 3.56C10.67 6.22 9.67 5.14 9.67 4.17c0-.85.76-1.67 1.83-1.67.58 0 1.09.27 1.42.68l1.08 1.28 1.08-1.28c.33-.41.84-.68 1.42-.68z"/></svg></div>
+        <div class="case-info">
+          <div class="case-id">Case #MC-2026-100</div>
+          <div class="case-meta">Status: Pending Settlement<br>Type: Normal</div>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" style="fill:#9ca3af;"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </div>
+      <div class="case-card">
+        <div class="case-avatar"><svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5.5-3.5c1.07 0 1.83.82 1.83 1.67 0 .97-1.02 2.05-3.33 3.56C10.67 6.22 9.67 5.14 9.67 4.17c0-.85.76-1.67 1.83-1.67.58 0 1.09.27 1.42.68l1.08 1.28 1.08-1.28c.33-.41.84-.68 1.42-.68z"/></svg></div>
+        <div class="case-info">
+          <div class="case-id">Case #MC-2026-101</div>
+          <div class="case-meta">Status: Pending Settlement<br>Type: Normal</div>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" style="fill:#9ca3af;"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </div>
+      <div class="case-card">
+        <div class="case-avatar"><svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5.5-3.5c1.07 0 1.83.82 1.83 1.67 0 .97-1.02 2.05-3.33 3.56C10.67 6.22 9.67 5.14 9.67 4.17c0-.85.76-1.67 1.83-1.67.58 0 1.09.27 1.42.68l1.08 1.28 1.08-1.28c.33-.41.84-.68 1.42-.68z"/></svg></div>
+        <div class="case-info">
+          <div class="case-id">Case #MC-2026-102</div>
+          <div class="case-meta">Status: Pending Settlement<br>Type: Normal</div>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" style="fill:#9ca3af;"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </div>
+      <div class="case-card">
+        <div class="case-avatar"><svg xmlns="http://www.w3.org/2000/svg" height="22" width="22" viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5.5-3.5c1.07 0 1.83.82 1.83 1.67 0 .97-1.02 2.05-3.33 3.56C10.67 6.22 9.67 5.14 9.67 4.17c0-.85.76-1.67 1.83-1.67.58 0 1.09.27 1.42.68l1.08 1.28 1.08-1.28c.33-.41.84-.68 1.42-.68z"/></svg></div>
+        <div class="case-info">
+          <div class="case-id">Case #MC-2026-103</div>
+          <div class="case-meta">Status: Pending Settlement<br>Type: Normal</div>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" style="fill:#9ca3af;"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab">
+      <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      Refer Patient
+    </button>
+  </div>
+</div>
+
+<!-- ===== ADMIN DASHBOARD ===== -->
+<div id="admin-panel" style="display:none;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:1100px;">
+  <p class="phone-label">Admin / Super-Vision Dashboard</p>
+  <div class="admin-shell">
+
+    <!-- Top bar -->
+    <div class="admin-topbar">
+      <span class="brand">Medi<span>Connect</span></span>
+      <span class="role-badge">ADMIN</span>
+      <div class="spacer"></div>
+      <div class="topbar-user">
+        <div class="avatar">A</div>
+        <span>Admin Panel</span>
+      </div>
+    </div>
+
+    <div class="admin-body">
+      <!-- Sidebar -->
+      <div class="admin-sidebar">
+        <div class="sidebar-section">Main</div>
+        <div class="sidebar-item active" onclick="adminNav(this,'overview')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          Overview
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'users')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          Users
+          <span class="sidebar-badge">5</span>
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'cases')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+          Cases
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'commissions')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+          Commissions
+        </div>
+        <div class="sidebar-section">Payments</div>
+        <div class="sidebar-item" onclick="adminNav(this,'withdrawals')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+          Withdrawals
+          <span class="sidebar-badge">8</span>
+        </div>
+        <div class="sidebar-section">Other</div>
+        <div class="sidebar-item" onclick="adminNav(this,'kyc')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          KYC Verify
+          <span class="sidebar-badge">3</span>
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'campaigns')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+          Campaigns
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'reports')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          Reports
+        </div>
+        <div class="sidebar-item" onclick="adminNav(this,'settings')">
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+          Settings
+        </div>
+      </div>
+
+      <!-- Main content panels -->
+      <div class="admin-main">
+
+        <!-- OVERVIEW panel -->
+        <div id="admin-overview" class="admin-section">
+          <div>
+            <div class="admin-page-title">Dashboard Overview</div>
+            <div class="admin-page-subtitle">MediConnect — Real-time platform snapshot &nbsp;·&nbsp; June 10, 2026</div>
+          </div>
+
+          <!-- KPI Row -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#eff6ff;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#2563eb;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 12%</span>
+              </div>
+              <div class="kpi-value">247</div>
+              <div class="kpi-label">Total Agents</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#f0fdf4;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#10b981;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 5%</span>
+              </div>
+              <div class="kpi-value">89</div>
+              <div class="kpi-label">Active Doctors</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#fff7ed;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#f97316;"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 8%</span>
+              </div>
+              <div class="kpi-value">₹18.4L</div>
+              <div class="kpi-label">Total Commissions Paid</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#fef2f2;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#ef4444;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                </div>
+                <span class="kpi-trend down">▼ 2</span>
+              </div>
+              <div class="kpi-value">8</div>
+              <div class="kpi-label">Pending Withdrawals</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#faf5ff;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#a855f7;"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.33C18 2.54 15.96.5 13.5.5c-1.3 0-2.41.58-3.2 1.44L10 2.22 9.7 1.94C8.91 1.08 7.79.5 6.5.5 4.04.5 2 2.54 2 4.67c0 .45.11.89.18 1.33H0v14c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 24</span>
+              </div>
+              <div class="kpi-value">1,842</div>
+              <div class="kpi-label">Total Cases (MTD)</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#f0f9ff;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#0ea5e9;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                </div>
+                <span class="kpi-trend down">▼ 1</span>
+              </div>
+              <div class="kpi-value">3</div>
+              <div class="kpi-label">KYC Pending</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#f0fdf4;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#22c55e;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 3</span>
+              </div>
+              <div class="kpi-value">₹2.6L</div>
+              <div class="kpi-label">Total Bill Amount (Today)</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <div class="kpi-icon" style="background:#fef9c3;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="fill:#ca8a04;"><path d="M12 20h9V4H3v16h9zm0 2H3c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h18c1.1 0 2 .9 2 2v16c0 1.1-.9 2-2 2h-9zm-6-6v-2h12v2H6zm0-4V8h12v2H6z"/></svg>
+                </div>
+                <span class="kpi-trend up">▲ 2</span>
+              </div>
+              <div class="kpi-value">2</div>
+              <div class="kpi-label">Active Campaigns</div>
+            </div>
+          </div>
+
+          <!-- Bottom row -->
+          <div class="admin-row">
+            <!-- Recent Cases Table -->
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <span class="admin-card-title">Recent Cases</span>
+                <button class="admin-card-action">View All →</button>
+              </div>
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Case ID</th>
+                    <th>Agent</th>
+                    <th>Type</th>
+                    <th>Bill (₹)</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>MC-2026-148</b></td>
+                    <td>Ravi Kumar</td>
+                    <td><span class="status-pill pill-blue">Normal</span></td>
+                    <td>12,500</td>
+                    <td><span class="status-pill pill-yellow">Pending</span></td>
+                    <td>10 Jun</td>
+                  </tr>
+                  <tr>
+                    <td><b>MC-2026-147</b></td>
+                    <td>Sunita Rao</td>
+                    <td><span class="status-pill pill-gray">Insurance</span></td>
+                    <td>48,000</td>
+                    <td><span class="status-pill pill-green">Settled</span></td>
+                    <td>10 Jun</td>
+                  </tr>
+                  <tr>
+                    <td><b>MC-2026-146</b></td>
+                    <td>Arjun Mehta</td>
+                    <td><span class="status-pill pill-blue">Normal</span></td>
+                    <td>9,800</td>
+                    <td><span class="status-pill pill-yellow">Active</span></td>
+                    <td>9 Jun</td>
+                  </tr>
+                  <tr>
+                    <td><b>MC-2026-145</b></td>
+                    <td>Priya Nair</td>
+                    <td><span class="status-pill pill-blue">Normal</span></td>
+                    <td>15,200</td>
+                    <td><span class="status-pill pill-green">Settled</span></td>
+                    <td>9 Jun</td>
+                  </tr>
+                  <tr>
+                    <td><b>MC-2026-144</b></td>
+                    <td>Karan Singh</td>
+                    <td><span class="status-pill pill-gray">Insurance</span></td>
+                    <td>72,000</td>
+                    <td><span class="status-pill pill-red">Disputed</span></td>
+                    <td>8 Jun</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Right column -->
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <!-- Pending Withdrawals -->
+              <div class="admin-card">
+                <div class="admin-card-header">
+                  <span class="admin-card-title">Withdrawal Requests</span>
+                  <span class="status-pill pill-red" style="font-size:10px;">8 Pending</span>
+                </div>
+                <div class="approval-item">
+                  <div class="approval-avatar" style="background:#2563eb;">RK</div>
+                  <div class="approval-info">
+                    <div class="approval-name">Ravi Kumar</div>
+                    <div class="approval-meta">₹8,400 · Agent · Normal Case</div>
+                  </div>
+                  <div class="approval-actions">
+                    <button class="btn-approve">Approve</button>
+                    <button class="btn-reject">Reject</button>
+                  </div>
+                </div>
+                <div class="approval-item">
+                  <div class="approval-avatar" style="background:#10b981;">SR</div>
+                  <div class="approval-info">
+                    <div class="approval-name">Sunita Rao</div>
+                    <div class="approval-meta">₹11,200 · Agent · Insurance</div>
+                  </div>
+                  <div class="approval-actions">
+                    <button class="btn-approve">Approve</button>
+                    <button class="btn-reject">Reject</button>
+                  </div>
+                </div>
+                <div class="approval-item">
+                  <div class="approval-avatar" style="background:#f97316;">DR</div>
+                  <div class="approval-info">
+                    <div class="approval-name">Dr. Ramesh</div>
+                    <div class="approval-meta">₹24,000 · Doctor</div>
+                  </div>
+                  <div class="approval-actions">
+                    <button class="btn-approve">Approve</button>
+                    <button class="btn-reject">Reject</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Top Agents -->
+              <div class="admin-card">
+                <div class="admin-card-header">
+                  <span class="admin-card-title">Top Agents (June)</span>
+                  <button class="admin-card-action">Full Report</button>
+                </div>
+                <div class="mini-bar-row">
+                  <span class="mini-bar-label">Ravi Kumar</span>
+                  <div class="mini-bar-track"><div class="mini-bar-fill" style="width:92%;background:#2563eb;"></div></div>
+                  <span class="mini-bar-val">46</span>
+                </div>
+                <div class="mini-bar-row">
+                  <span class="mini-bar-label">Priya Nair</span>
+                  <div class="mini-bar-track"><div class="mini-bar-fill" style="width:74%;background:#10b981;"></div></div>
+                  <span class="mini-bar-val">37</span>
+                </div>
+                <div class="mini-bar-row">
+                  <span class="mini-bar-label">Arjun Mehta</span>
+                  <div class="mini-bar-track"><div class="mini-bar-fill" style="width:60%;background:#a855f7;"></div></div>
+                  <span class="mini-bar-val">30</span>
+                </div>
+                <div class="mini-bar-row">
+                  <span class="mini-bar-label">Karan Singh</span>
+                  <div class="mini-bar-track"><div class="mini-bar-fill" style="width:46%;background:#f97316;"></div></div>
+                  <span class="mini-bar-val">23</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /overview -->
+
+        <!-- OTHER PANELS (placeholder) -->
+        <div id="admin-users" class="admin-section" style="display:none;">
+          <div class="admin-page-title">User Management</div>
+          <div class="admin-page-subtitle">Agents · Doctors · KYC Approvals</div>
+          <div class="admin-card" style="margin-top:16px;">
+            <div class="admin-card-header">
+              <span class="admin-card-title">All Users</span>
+              <div style="display:flex;gap:8px;">
+                <select style="padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;font-family:'Poppins',sans-serif;font-size:12px;color:#374151;"><option>All Roles</option><option>Agent</option><option>Doctor</option></select>
+                <select style="padding:4px 10px;border-radius:8px;border:1px solid #e2e8f0;font-family:'Poppins',sans-serif;font-size:12px;color:#374151;"><option>All Status</option><option>Active</option><option>KYC Pending</option><option>Suspended</option></select>
+              </div>
+            </div>
+            <table class="admin-table">
+              <thead><tr><th>Name</th><th>Role</th><th>Agent Code</th><th>Cases</th><th>KYC</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                <tr><td><b>Ravi Kumar</b></td><td>Agent</td><td>AGT-001</td><td>46</td><td><span class="status-pill pill-green">Verified</span></td><td><span class="status-pill pill-green">Active</span></td><td><button class="admin-card-action">View</button></td></tr>
+                <tr><td><b>Priya Nair</b></td><td>Agent</td><td>AGT-002</td><td>37</td><td><span class="status-pill pill-green">Verified</span></td><td><span class="status-pill pill-green">Active</span></td><td><button class="admin-card-action">View</button></td></tr>
+                <tr><td><b>Naveen Sharma</b></td><td>Agent</td><td>AGT-031</td><td>4</td><td><span class="status-pill pill-yellow">Pending</span></td><td><span class="status-pill pill-yellow">Review</span></td><td><button class="btn-approve" style="font-size:11px;padding:3px 10px;">Approve</button></td></tr>
+                <tr><td><b>Dr. Ramesh</b></td><td>Doctor</td><td>DOC-007</td><td>88</td><td><span class="status-pill pill-green">Verified</span></td><td><span class="status-pill pill-green">Active</span></td><td><button class="admin-card-action">View</button></td></tr>
+                <tr><td><b>Dr. Meera</b></td><td>Doctor</td><td>DOC-022</td><td>12</td><td><span class="status-pill pill-red">Rejected</span></td><td><span class="status-pill pill-red">Suspended</span></td><td><button class="admin-card-action">View</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="admin-cases" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Case Management</div>
+          <div class="admin-page-subtitle">All platform cases — filter, resolve, audit</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">Full case analytics table — coming soon in the live Flutter build.</div></div>
+        </div>
+        <div id="admin-commissions" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Commission Management</div>
+          <div class="admin-page-subtitle">Tier adjustments · Manual overrides · Audit trail</div>
+          <div class="admin-card" style="margin-top:16px;">
+            <div class="admin-card-header"><span class="admin-card-title">Commission Tiers (Active)</span></div>
+            <table class="admin-table">
+              <thead><tr><th>Case Range</th><th>Agent Rate</th><th>Doctor Rate</th><th>Insurance Rate</th></tr></thead>
+              <tbody>
+                <tr><td>0 – 10 cases</td><td>20%</td><td>5–10%</td><td>5% fixed</td></tr>
+                <tr><td>11 – 25 cases</td><td>22%</td><td>5–10%</td><td>5% fixed</td></tr>
+                <tr><td>25+ cases</td><td>25%</td><td>5–10%</td><td>5% fixed</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="admin-withdrawals" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Withdrawal Requests</div>
+          <div class="admin-page-subtitle">Pending approval queue · 8 requests awaiting action</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">Full withdrawal approval queue — rendered in overview panel for now.</div></div>
+        </div>
+        <div id="admin-kyc" class="admin-section" style="display:none;">
+          <div class="admin-page-title">KYC Verification</div>
+          <div class="admin-page-subtitle">3 users pending document review</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">KYC document viewer — renders ID, license, and bank proof uploads.</div></div>
+        </div>
+        <div id="admin-campaigns" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Campaign Management</div>
+          <div class="admin-page-subtitle">2 active campaigns · Bonus distribution</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">Campaign editor — create, assign agents, track performance.</div></div>
+        </div>
+        <div id="admin-reports" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Reports</div>
+          <div class="admin-page-subtitle">Agent performance · Financial summary · Export CSV/PDF</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">Report builder — filter by date, agent, doctor, and export formats.</div></div>
+        </div>
+        <div id="admin-settings" class="admin-section" style="display:none;">
+          <div class="admin-page-title">Settings</div>
+          <div class="admin-page-subtitle">Commission rates · Withdrawal rules · Penalty config</div>
+          <div class="admin-card" style="margin-top:16px;"><div style="color:#64748b;font-size:13px;padding:24px;text-align:center;">Platform configuration panel — commission tiers, withdrawal windows, penalty %, insurance rules.</div></div>
+        </div>
+
+      </div><!-- /admin-main -->
+    </div><!-- /admin-body -->
+  </div><!-- /admin-shell -->
+</div><!-- /admin-panel -->
+
+<script>
+  function showScreen(name) {
+    document.getElementById('login-phone').style.display = name === 'login' ? 'flex' : 'none';
+    document.getElementById('dashboard-phone').style.display = name === 'dashboard' ? 'flex' : 'none';
+    document.getElementById('admin-panel').style.display = name === 'admin' ? 'flex' : 'none';
+    document.querySelectorAll('.screen-tab').forEach((t, i) => {
+      t.classList.toggle('active',
+        (i === 0 && name === 'login') ||
+        (i === 1 && name === 'dashboard') ||
+        (i === 2 && name === 'admin')
+      );
+    });
+  }
+
+  function adminNav(el, section) {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
+    document.getElementById('admin-' + section).style.display = '';
+  }
+</script>
+</body>
+</html>
