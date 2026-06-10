@@ -12,10 +12,11 @@ export default function ManagerSidebar() {
   const activeAgents = myTeamAgents.filter(a => a.status === 'active').length;
 
   const NAV = [
-    { href: '/manager',          icon: '🏠', label: 'Dashboard',     badge: 0 },
-    { href: '/manager/agents',   icon: '👥', label: 'My Agents',     badge: activeAgents },
-    { href: '/manager/patients', icon: '🏥', label: 'Team Patients', badge: 0 },
-    { href: '/manager/earnings', icon: '💰', label: 'Team Earnings', badge: 0 },
+    { href: '/manager',              icon: '🏠', label: 'Dashboard',       badge: 0 },
+    { href: '/manager/agents',       icon: '👥', label: 'My Agents',       badge: activeAgents },
+    { href: '/manager/add-patient',  icon: '➕', label: 'Add Patient Lead', badge: 0 },
+    { href: '/manager/patients',     icon: '🏥', label: 'Team Patients',   badge: 0 },
+    { href: '/manager/earnings',     icon: '💰', label: 'Team Earnings',   badge: 0 },
   ];
 
   const content = (

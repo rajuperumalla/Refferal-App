@@ -485,6 +485,7 @@ export interface StoreContextType extends AppState {
     name: string; phone: string; age: number; gender: 'M' | 'F';
     specialty: string; procedure: string; city: string;
     packageCost: number; hospital?: string | null; urgency?: string;
+    agentIdOverride?: string; // manager can submit on behalf of a specific agent
   }): void;
   approveCommission(id: number): void;
   rejectCommission(id: number, reason: string): void;
@@ -549,9 +550,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     name: string; phone: string; age: number; gender: 'M' | 'F';
     specialty: string; procedure: string; city: string;
     packageCost: number; hospital?: string | null; urgency?: string;
+    agentIdOverride?: string;
   }) => {
     if (!currentAgent) return;
-    const commPct    = state.settings.commissionRates[data.specialty] ?? currentAgent.commissionRate;
+    // Manager can submit on behalf of a specific agent in their team
+    const targetAgent = data.agentIdOverride
+      ? (state.agents.find(a => a.id === data.agentIdOverride) ?? currentAgent)
+      : currentAgent;
+    const commPct    = state.settings.commissionRates[data.specialty] ?? targetAgent.commissionRate;
     const commission = Math.round(data.packageCost * commPct / 100);
     const patientId  = Math.max(0, ...state.patients.map(p => p.id)) + 1;
     const commId     = Math.max(0, ...state.commissions.map(c => c.id)) + 1;
@@ -563,22 +569,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         specialty: data.specialty, procedure: data.procedure, status: 'new',
         commission, commPct, packageCost: data.packageCost,
         city: data.city, hospital: data.hospital ?? null,
-        agentId: currentAgent.id, agentName: currentAgent.name, createdAt: today(),
+        agentId: targetAgent.id, agentName: targetAgent.name, createdAt: today(),
       },
       commission: {
-        id: commId, agentId: currentAgent.id, agentName: currentAgent.name,
+        id: commId, agentId: targetAgent.id, agentName: targetAgent.name,
         patientName: data.name, procedure: data.procedure || 'TBD',
         amount: commission, status: 'pending_approval', createdAt: today(),
       },
       notification: {
-        id: nextNotifId(), agentId: currentAgent.id, type: 'patient',
+        id: nextNotifId(), agentId: targetAgent.id, type: 'patient',
         title: 'Lead Submitted', body: `${data.name} — our team will contact them within 24h.`,
         time: 'Just now', read: false,
       },
       log: {
         id: nextLogId(), type: 'patient_added', title: 'Patient Lead Added',
-        detail: `${data.name} — ${data.specialty} via ${currentAgent.name}`,
-        time: 'Just now', actor: currentAgent.id,
+        detail: `${data.name} — ${data.specialty} via ${targetAgent.name}${data.agentIdOverride ? ` (added by ${currentAgent.name})` : ''}`,
+        time: 'Just now', actor: targetAgent.id,
       },
     });
   };
