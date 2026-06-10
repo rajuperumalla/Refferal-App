@@ -14,6 +14,12 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    section: 'Team',
+    items: [
+      { href: '/admin/managers', icon: '🧑‍💼', label: 'Managers' },
+    ],
+  },
+  {
     section: 'Management',
     items: [
       { href: '/admin/agents',      icon: '👥', label: 'Agents' },

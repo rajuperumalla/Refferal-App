@@ -18,6 +18,58 @@ class FirestoreService {
     return {'id': doc.id, ...doc.data() as Map<String, dynamic>};
   }
 
+  // Look up pre-created profile by phone (handles +91 XXXXX XXXXX & +91XXXXXXXXXX)
+  Future<Map<String, dynamic>?> getAgentByPhone(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'[\s\-]'), '').replaceAll('+91', '');
+    final variants = [
+      phone,
+      '+91$digits',
+      '+91 ${digits.substring(0, 5)} ${digits.substring(5)}',
+    ];
+    for (final v in variants) {
+      final snap = await _agents.where('phone', isEqualTo: v).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final doc = snap.docs.first;
+        return {'id': doc.id, ...doc.data() as Map<String, dynamic>};
+      }
+    }
+    return null;
+  }
+
+  // Real-time stream of all agents under a manager
+  Stream<List<Map<String, dynamic>>> teamAgentsStream(String managerId) {
+    return _agents
+        .where('managerId', isEqualTo: managerId)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+            .toList());
+  }
+
+  // Real-time stream of all patients for a list of agent IDs
+  Stream<List<Map<String, dynamic>>> teamPatientsStream(List<String> agentIds) {
+    if (agentIds.isEmpty) return Stream.value([]);
+    return _patients
+        .where('agentId', whereIn: agentIds.take(30).toList())
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+            .toList());
+  }
+
+  // Real-time stream of commissions for a list of agent IDs
+  Stream<List<Map<String, dynamic>>> teamCommissionsStream(List<String> agentIds) {
+    if (agentIds.isEmpty) return Stream.value([]);
+    return _commissions
+        .where('agentId', whereIn: agentIds.take(30).toList())
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+            .toList());
+  }
+
   Future<void> createAgent(String uid, Map<String, dynamic> data) async {
     await _agents.doc(uid).set({
       ...data,

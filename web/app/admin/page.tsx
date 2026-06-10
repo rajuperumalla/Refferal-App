@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { STATUS_BADGE, fmtINR, fmtL } from '@/lib/admin-data';
@@ -10,6 +11,7 @@ const activityIcon: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { agents, patients, commissions, monthlyRevenue, activityLog } = useStore();
+  const [expandedMgr, setExpandedMgr] = useState<string | null>(null);
 
   const activeAgents    = agents.filter(a => a.status === 'active').length;
   const pendingAgents   = agents.filter(a => a.status === 'pending').length;
@@ -41,6 +43,36 @@ export default function AdminDashboard() {
   const cities = Object.entries(cityMap).sort((a, b) => b[1] - a[1]);
   const maxCity = Math.max(...cities.map(([, n]) => n), 1);
 
+  // ── Manager metrics ───────────────────────────────────────────────────────
+  const managers = agents.filter(a => a.role === 'manager');
+  const managerStats = managers.map(mgr => {
+    const team        = agents.filter(a => a.role === 'agent' && a.managerId === mgr.id);
+    const teamIds     = team.map(a => a.id);
+    const teamPats    = patients.filter(p => teamIds.includes(p.agentId));
+    const teamComms   = commissions.filter(c => teamIds.includes(c.agentId));
+    const active      = team.filter(a => a.status === 'active').length;
+    const pending_ap  = team.filter(a => a.status === 'pending').length;
+    const thisMonth   = team.reduce((s, a) => s + a.thisMonth, 0);
+    const totalEarned = team.reduce((s, a) => s + a.totalEarned, 0);
+    const completed   = teamPats.filter(p => p.status === 'completed').length;
+    const ipd         = teamPats.filter(p => p.status === 'ipd_confirmed').length;
+    const opd         = teamPats.filter(p => p.status === 'opd_scheduled').length;
+    const newLeads    = teamPats.filter(p => p.status === 'new').length;
+    const convRate    = teamPats.length > 0 ? Math.round((completed / teamPats.length) * 100) : 0;
+    const pendAmt     = teamComms.filter(c => c.status === 'pending_approval').reduce((s, c) => s + c.amount, 0);
+    const paidAmt     = teamComms.filter(c => c.status === 'paid').reduce((s, c) => s + c.amount, 0);
+    const topAgent    = [...team].sort((a, b) => b.thisMonth - a.thisMonth)[0];
+    const statusBreak = [
+      { key: 'new', label: 'New', count: newLeads, color: 'bg-blue-400' },
+      { key: 'opd_scheduled', label: 'OPD', count: opd, color: 'bg-green-400' },
+      { key: 'ipd_confirmed', label: 'IPD', count: ipd, color: 'bg-purple-400' },
+      { key: 'completed', label: 'Done', count: completed, color: 'bg-emerald-500' },
+    ];
+    return { mgr, team, teamPats, active, pending_ap, thisMonth, totalEarned, completed, ipd, opd, newLeads, convRate, pendAmt, paidAmt, topAgent, statusBreak };
+  });
+  const maxMgrRevenue = Math.max(...managerStats.map(m => m.thisMonth), 1);
+  const totalMgrRevenue = managerStats.reduce((s, m) => s + m.thisMonth, 0);
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -61,6 +93,211 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── Manager Performance ─────────────────────────────────────── */}
+      {managers.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Section header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100"
+            style={{ background: 'linear-gradient(135deg,#faf5ff 0%,#f3e8ff 100%)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white text-base shadow-sm">👔</div>
+              <div>
+                <div className="font-bold text-gray-900">Manager Performance</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {managers.length} managers · {managerStats.reduce((s, m) => s + m.team.length, 0)} agents · {fmtL(totalMgrRevenue)} team revenue this month
+                </div>
+              </div>
+            </div>
+            <Link href="/admin/agents"
+              className="text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 px-3 py-1.5 rounded-lg transition-colors">
+              Manage All →
+            </Link>
+          </div>
+
+          {/* Manager cards */}
+          <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {managerStats.map(({ mgr, team, teamPats, active, pending_ap, thisMonth, totalEarned, convRate, pendAmt, paidAmt, topAgent, statusBreak }) => {
+              const isExpanded = expandedMgr === mgr.id;
+              const badge = STATUS_BADGE[mgr.status];
+              const totalPats = teamPats.length;
+              const maxBreak  = Math.max(...statusBreak.map(s => s.count), 1);
+
+              return (
+                <div key={mgr.id}
+                  className={`border rounded-2xl overflow-hidden transition-all duration-200 ${isExpanded ? 'border-purple-300 shadow-md shadow-purple-100' : 'border-gray-100 hover:border-purple-200 hover:shadow-sm'}`}>
+
+                  {/* Card header */}
+                  <div className="p-4 flex items-start justify-between"
+                    style={{ background: 'linear-gradient(135deg,#f9f5ff 0%,#fdf4ff 100%)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white text-xl font-bold shadow-sm">
+                          {mgr.name[0]}
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900 text-sm">{mgr.name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-200 text-purple-800 tracking-wide">MGR</span>
+                        </div>
+                        <div className="text-xs text-gray-500">{mgr.id} · {mgr.city}</div>
+                        {mgr.email && <div className="text-[10px] text-gray-400 mt-0.5">{mgr.email}</div>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.bg} ${badge.color}`}>{badge.label}</span>
+                      <button onClick={() => setExpandedMgr(isExpanded ? null : mgr.id)}
+                        className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:border-purple-300 hover:text-purple-600 transition-all text-xs shadow-sm">
+                        {isExpanded ? '▲' : '▼'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Stats grid */}
+                  <div className="px-4 py-3 grid grid-cols-4 gap-2 border-b border-gray-50">
+                    {[
+                      { icon: '👥', label: 'Agents',    value: team.length,    sub: `${active} active`, color: 'text-blue-600',    bg: 'bg-blue-50' },
+                      { icon: '🏥', label: 'Patients',  value: totalPats,      sub: `${teamPats.filter(p=>p.status==='ipd_confirmed').length} IPD`, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                      { icon: '📈', label: 'Conv. Rate', value: `${convRate}%`, sub: `${teamPats.filter(p=>p.status==='completed').length} done`, color: convRate >= 60 ? 'text-emerald-600' : 'text-amber-600', bg: convRate >= 60 ? 'bg-emerald-50' : 'bg-amber-50' },
+                      { icon: '💰', label: 'This Month', value: fmtL(thisMonth), sub: `↓${fmtL(pendAmt)} pend`, color: 'text-purple-700', bg: 'bg-purple-50' },
+                    ].map(s => (
+                      <div key={s.label} className={`${s.bg} rounded-xl px-2 py-2.5 text-center`}>
+                        <div className="text-sm mb-0.5">{s.icon}</div>
+                        <div className={`text-sm font-bold ${s.color}`}>{s.value}</div>
+                        <div className="text-[9px] text-gray-500 font-medium">{s.label}</div>
+                        <div className="text-[9px] text-gray-400">{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Revenue bar */}
+                  <div className="px-4 py-3 border-b border-gray-50">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs font-medium text-gray-600">Team Revenue Share</span>
+                      <span className="text-xs font-bold text-purple-700">{fmtINR(thisMonth)}</span>
+                    </div>
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(thisMonth / maxMgrRevenue) * 100}%`, background: 'linear-gradient(90deg,#7C3AED,#A855F7)' }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <span>Total earned: {fmtL(totalEarned)}</span>
+                      <span>Paid out: {fmtL(paidAmt)}</span>
+                    </div>
+                  </div>
+
+                  {/* Top agent strip */}
+                  {topAgent && (
+                    <div className="px-4 py-2.5 flex items-center justify-between border-b border-gray-50 bg-amber-50/40">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🏆</span>
+                        <div>
+                          <span className="text-xs font-semibold text-gray-800">{topAgent.name}</span>
+                          <span className="text-[10px] text-gray-400 ml-1.5">Top performer</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-emerald-600">{fmtINR(topAgent.thisMonth)}</div>
+                        <div className="text-[10px] text-gray-400">{topAgent.conversionRate}% conv.</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expanded: Patient pipeline breakdown + all-agents list */}
+                  {isExpanded && (
+                    <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50 space-y-3">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">Patient Pipeline Breakdown</div>
+                      {statusBreak.map(s => (
+                        <div key={s.key} className="flex items-center gap-2">
+                          <span className="w-14 text-[10px] text-gray-500">{s.label}</span>
+                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${s.color} transition-all`}
+                              style={{ width: `${(s.count / maxBreak) * 100}%` }} />
+                          </div>
+                          <span className="w-5 text-right text-[10px] font-bold text-gray-700">{s.count}</span>
+                        </div>
+                      ))}
+
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="text-xs font-semibold text-gray-700 mb-2">
+                          All Agents ({team.length}) {pending_ap > 0 && <span className="text-amber-600 font-normal">· {pending_ap} pending approval</span>}
+                        </div>
+                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                          {[...team].sort((a, b) => b.thisMonth - a.thisMonth).map(ag => (
+                            <div key={ag.id} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-[9px] font-bold flex-shrink-0">
+                                  {ag.name[0]}
+                                </div>
+                                <div>
+                                  <div className="text-[10px] font-medium text-gray-900">{ag.name}</div>
+                                  <div className="text-[9px] text-gray-400">{ag.city}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-emerald-600">{fmtINR(ag.thisMonth)}</span>
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_BADGE[ag.status].bg} ${STATUS_BADGE[ag.status].color}`}>
+                                  {STATUS_BADGE[ag.status].label}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="px-4 py-3 flex gap-2">
+                    <Link href="/admin/agents"
+                      className="flex-1 text-center text-[11px] font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-2 py-2 rounded-xl transition-colors">
+                      👥 Team
+                    </Link>
+                    <Link href="/admin/patients"
+                      className="flex-1 text-center text-[11px] font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-2 rounded-xl transition-colors">
+                      🏥 Patients
+                    </Link>
+                    <Link href="/admin/commissions"
+                      className="flex-1 text-center text-[11px] font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 px-2 py-2 rounded-xl transition-colors">
+                      💰 Earnings
+                    </Link>
+                    <button onClick={() => setExpandedMgr(isExpanded ? null : mgr.id)}
+                      className="flex-1 text-center text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-2 rounded-xl transition-colors">
+                      {isExpanded ? '▲ Less' : '▼ Details'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Cross-manager comparison footer */}
+          <div className="px-5 pb-4">
+            <div className="bg-gray-50 rounded-2xl p-4">
+              <div className="text-xs font-semibold text-gray-700 mb-3">Team Revenue Comparison</div>
+              <div className="space-y-2">
+                {[...managerStats].sort((a, b) => b.thisMonth - a.thisMonth).map(({ mgr, thisMonth, team, convRate }) => (
+                  <div key={mgr.id} className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+                      {mgr.name[0]}
+                    </div>
+                    <span className="w-28 text-xs font-medium text-gray-700 truncate">{mgr.name.split(' ')[0]}'s Team</span>
+                    <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(thisMonth / maxMgrRevenue) * 100}%`, background: 'linear-gradient(90deg,#7C3AED,#A855F7)' }} />
+                    </div>
+                    <span className="text-xs font-bold text-purple-700 w-14 text-right">{fmtL(thisMonth)}</span>
+                    <span className="text-[10px] text-gray-500 w-12 text-right">{team.length} agents</span>
+                    <span className={`text-[10px] font-semibold w-10 text-right ${convRate >= 60 ? 'text-emerald-600' : 'text-amber-600'}`}>{convRate}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Revenue Chart + Pipeline */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

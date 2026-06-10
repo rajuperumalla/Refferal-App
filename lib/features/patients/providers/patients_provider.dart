@@ -100,17 +100,19 @@ class PatientsState {
 
 // ── Patients Notifier ─────────────────────────────────────────────────────────
 
-class PatientsNotifier extends StateNotifier<PatientsState> {
-  final String agentId;
-
-  PatientsNotifier(this.agentId) : super(const PatientsState()) {
-    fetchPatients();
+class PatientsNotifier extends Notifier<PatientsState> {
+  @override
+  PatientsState build() {
+    Future.microtask(() => fetchPatients());
+    return const PatientsState();
   }
+
+  String get _agentId => ref.read(currentUserProvider)?.id ?? '';
 
   Future<void> fetchPatients() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final data = await firestoreService.getPatients(agentId);
+      final data = await firestoreService.getPatients(_agentId);
       final patients = data.map((j) => PatientModel.fromFirestore(j)).toList();
       state = state.copyWith(patients: patients, isLoading: false);
     } catch (e) {
@@ -132,7 +134,7 @@ class PatientsNotifier extends StateNotifier<PatientsState> {
 
   Future<bool> addPatient(Map<String, dynamic> formData) async {
     try {
-      await firestoreService.addPatient({...formData, 'agentId': agentId});
+      await firestoreService.addPatient({...formData, 'agentId': _agentId});
       await fetchPatients();
       return true;
     } catch (_) {
@@ -154,12 +156,17 @@ class PatientsNotifier extends StateNotifier<PatientsState> {
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 final patientsProvider =
-    StateNotifierProvider<PatientsNotifier, PatientsState>((ref) {
-  final user = ref.watch(currentUserProvider);
-  return PatientsNotifier(user?.id ?? '');
-});
+    NotifierProvider<PatientsNotifier, PatientsState>(PatientsNotifier.new);
 
-final selectedPatientProvider = StateProvider<PatientModel?>((ref) => null);
+class _SelectedPatientNotifier extends Notifier<PatientModel?> {
+  @override
+  PatientModel? build() => null;
+  void select(PatientModel? p) => state = p;
+}
+
+final selectedPatientProvider =
+    NotifierProvider<_SelectedPatientNotifier, PatientModel?>(
+        _SelectedPatientNotifier.new);
 
 // Real-time stream provider (use when you need live updates)
 final patientsStreamProvider =

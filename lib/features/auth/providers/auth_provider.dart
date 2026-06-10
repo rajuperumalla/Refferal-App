@@ -41,9 +41,11 @@ class AuthState {
   }
 }
 
-class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState()) {
-    _init();
+class AuthNotifier extends Notifier<AuthState> {
+  @override
+  AuthState build() {
+    Future.microtask(() => _init());
+    return const AuthState();
   }
 
   Future<void> _init() async {
@@ -58,7 +60,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _loadUserModel(String uid) async {
     try {
-      final data = await firestoreService.getAgent(uid);
+      var data = await firestoreService.getAgent(uid);
+
+      // If not found by Firebase UID, search by phone (pre-created in web admin)
+      if (data == null) {
+        final phone = firebaseAuthService.phoneNumber ?? '';
+        if (phone.isNotEmpty) {
+          final phoneData = await firestoreService.getAgentByPhone(phone);
+          if (phoneData != null) {
+            // Link this Firebase UID to the pre-created profile
+            final toSave = Map<String, dynamic>.from(phoneData)
+              ..remove('id');
+            await firestoreService.createAgent(uid, {
+              ...toSave,
+              'firebaseUid': uid,
+            });
+            data = phoneData;
+          }
+        }
+      }
+
       final user = data != null
           ? UserModel.fromFirestore(uid, data)
           : UserModel.newFromUid(uid, firebaseAuthService.phoneNumber ?? '');
@@ -170,8 +191,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-  (ref) => AuthNotifier(),
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(
+  AuthNotifier.new,
 );
 
 final isAuthenticatedProvider = Provider<bool>(

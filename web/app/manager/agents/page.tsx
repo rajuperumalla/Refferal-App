@@ -4,7 +4,6 @@ import { useStore } from '@/lib/store';
 import { fmtINR, STATUS_BADGE, CITY_CODES, generateAgentId } from '@/lib/admin-data';
 
 const SPECIALTIES = ['Orthopaedics','Cardiology','Neurology','Oncology','General Surgery','Gynecology','Urology','ENT','Ophthalmology','Gastroenterology','Nephrology','Pulmonology','Dermatology','Haematology'];
-const COMM_RATES  = [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8,10,12,15,20,25,28];
 
 export default function ManagerAgentsPage() {
   const { myTeamAgents, agents, currentAgentId, createAgent, updateAgent } = useStore();
@@ -15,13 +14,14 @@ export default function ManagerAgentsPage() {
 
   const [form, setForm] = useState({
     name: '', phone: '', email: '', city: 'Hyderabad', state: 'Telangana',
-    commissionRate: 4, bank: '', upi: '', specialties: [] as string[],
+    commissionRate: 5, bank: '', upi: '', specialties: [] as string[],
   });
+  const [commRateRaw, setCommRateRaw] = useState('5');
 
-  const resetForm = () => setForm({ name:'', phone:'', email:'', city:'Hyderabad', state:'Telangana', commissionRate:4, bank:'', upi:'', specialties:[] });
+  const resetForm = () => { setForm({ name:'', phone:'', email:'', city:'Hyderabad', state:'Telangana', commissionRate:5, bank:'', upi:'', specialties:[] }); setCommRateRaw('5'); };
 
   const openCreate = () => { resetForm(); setEditAgent(null); setShowCreate(true); };
-  const openEdit   = (a: typeof myTeamAgents[0]) => { setEditAgent(a); setForm({ name:a.name, phone:a.phone, email:a.email??'', city:a.city, state:a.state, commissionRate:a.commissionRate, bank:a.bank, upi:a.upi, specialties:[...a.specialties] }); setShowCreate(true); };
+  const openEdit   = (a: typeof myTeamAgents[0]) => { setEditAgent(a); setForm({ name:a.name, phone:a.phone, email:a.email??'', city:a.city, state:a.state, commissionRate:a.commissionRate, bank:a.bank, upi:a.upi, specialties:[...a.specialties] }); setCommRateRaw(String(a.commissionRate)); setShowCreate(true); };
 
   const handleSave = () => {
     if (!form.name || !form.phone) return;
@@ -174,11 +174,31 @@ export default function ManagerAgentsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Commission Rate *</label>
-                  <select value={form.commissionRate} onChange={e => setForm(f => ({...f, commissionRate: Number(e.target.value)}))}
-                    className="w-full border border-gray-200 rounded-xl px-3 h-10 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    {COMM_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-                  </select>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Commission Rate * <span className="text-gray-400 font-normal">(5–25%)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={commRateRaw}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^\d.]/g, '');
+                        setCommRateRaw(raw);
+                        const v = parseFloat(raw);
+                        if (!isNaN(v)) setForm(f => ({ ...f, commissionRate: v }));
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(commRateRaw);
+                        const clamped = isNaN(v) ? 5 : Math.min(25, Math.max(5, v));
+                        setCommRateRaw(String(clamped));
+                        setForm(f => ({ ...f, commissionRate: clamped }));
+                      }}
+                      placeholder="e.g. 10"
+                      className="w-full border border-gray-200 rounded-xl px-3 h-10 text-sm font-semibold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">%</span>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

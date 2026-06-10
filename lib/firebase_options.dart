@@ -29,22 +29,22 @@ class DefaultFirebaseOptions {
   // ⚠️  Replace ALL placeholder values below by running `flutterfire configure`
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_WEB_API_KEY',
-    appId: 'YOUR_WEB_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyDDz9KIuH4iCan7GqVvcjgImawUMg3wjlQ',
+    appId: '1:269800696958:web:cc94ebcb99bb59fb4f7c2f',
+    messagingSenderId: '269800696958',
+    projectId: 'xlcare-partner',
+    authDomain: 'xlcare-partner.firebaseapp.com',
+    storageBucket: 'xlcare-partner.firebasestorage.app',
+    measurementId: 'G-BH9CB8NVQG',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyAanbR2QYBxevYOA478tfz2neLmF2cCPhI',
+    appId: '1:269800696958:android:34914307cd6ddcc64f7c2f',
+    messagingSenderId: '269800696958',
+    projectId: 'xlcare-partner',
+    storageBucket: 'xlcare-partner.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'YOUR_IOS_API_KEY',
     appId: 'YOUR_IOS_APP_ID',
