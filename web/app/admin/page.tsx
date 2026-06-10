@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { STATUS_BADGE, fmtINR, fmtL } from '@/lib/admin-data';
+import { ensureAdminProfile } from '@/lib/firebase';
 
 const activityIcon: Record<string, string> = {
   commission_approved: '✅', agent_created: '👤', patient_added: '🏥',
@@ -12,6 +13,9 @@ const activityIcon: Record<string, string> = {
 export default function AdminDashboard() {
   const { agents, patients, commissions, monthlyRevenue, activityLog } = useStore();
   const [expandedMgr, setExpandedMgr] = useState<string | null>(null);
+
+  // Seed admin profile for phone 9182799751 on first load
+  useEffect(() => { ensureAdminProfile(); }, []);
 
   const activeAgents    = agents.filter(a => a.status === 'active').length;
   const pendingAgents   = agents.filter(a => a.status === 'pending').length;

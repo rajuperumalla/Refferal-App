@@ -55,7 +55,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     }
     final success = await ref.read(authProvider.notifier).verifyOtp(otp);
     if (success && mounted) {
-      context.go('/home');
+      final user = ref.read(currentUserProvider);
+      final role = user?.role ?? 'agent';
+      context.go(role == 'manager' ? '/manager/home' : '/home');
     }
   }
 

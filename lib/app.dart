@@ -37,24 +37,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Logged in on entry points → role-based home
       if (isLoggedIn && (loc == '/login' || loc == '/')) {
         final role = authState.user?.role ?? 'agent';
-        return role == 'manager' ? '/manager/home' : '/home';
+        return (role == 'manager' || role == 'admin') ? '/manager/home' : '/home';
       }
 
       // Role enforcement
       if (isLoggedIn) {
         final role = authState.user?.role ?? 'agent';
-        // Manager trying to access agent routes
-        if (role == 'manager' && loc.startsWith('/home')) {
+        final isManagerOrAdmin = role == 'manager' || role == 'admin';
+        // Manager/admin trying to access agent-only routes
+        if (isManagerOrAdmin && loc.startsWith('/home')) {
           return '/manager/home';
         }
-        if (role == 'manager' && loc.startsWith('/patients') && !loc.startsWith('/manager')) {
+        if (isManagerOrAdmin && loc.startsWith('/patients') && !loc.startsWith('/manager')) {
           return '/manager/patients';
         }
-        if (role == 'manager' && loc.startsWith('/earnings') && !loc.startsWith('/manager')) {
+        if (isManagerOrAdmin && loc.startsWith('/earnings') && !loc.startsWith('/manager')) {
           return '/manager/earnings';
         }
         // Agent trying to access manager routes
-        if (role != 'manager' && loc.startsWith('/manager')) {
+        if (!isManagerOrAdmin && loc.startsWith('/manager')) {
           return '/home';
         }
       }

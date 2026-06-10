@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { signInWithPhoneNumber, RecaptchaVerifier, ConfirmationResult } from 'firebase/auth';
 import { useStore } from '@/lib/store';
+import { db, getVerifyAuth, doc, setDoc, serverTimestamp } from '@/lib/firebase';
 import { AdminAgent, AgentStatus, STATUS_BADGE, CITY_CODES, generateAgentId, fmtINR, fmtL } from '@/lib/admin-data';
 
 type FilterStatus = AgentStatus | 'all';
@@ -20,7 +22,6 @@ const isValidName  = (v: string) =>
   v.trim().length >= 2 && v.trim().length <= 60 && /^[a-zA-Z\s\-.']+$/.test(v.trim());
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 const isValidUPI   = (v: string) => !v.trim() || /^[\w.\-]+@[\w]+$/.test(v.trim());
-const genOTP       = () => String(Math.floor(100000 + Math.random() * 900000));
 const OTP_TTL      = 5 * 60;
 const fmtTime      = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -53,12 +54,15 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
   const alreadyVerified = existing?.phoneVerified ?? false;
   const [phoneVerified, setPhoneVerified] = useState(alreadyVerified);
   const [otpSent,       setOtpSent]       = useState(false);
-  const [otpCode,       setOtpCode]       = useState('');
   const [otpInput,      setOtpInput]      = useState('');
   const [otpError,      setOtpError]      = useState('');
+  const [isSending,     setIsSending]     = useState(false);
   const [countdown,     setCountdown]     = useState(0);
   const [resendWait,    setResendWait]     = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recaptchaRef   = useRef<RecaptchaVerifier | null>(null);
+  const confirmRef     = useRef<ConfirmationResult | null>(null);
+  const recaptchaElRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -68,6 +72,9 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
     }, 1000);
     return () => clearInterval(timerRef.current!);
   }, [otpSent]);
+
+  // Cleanup recaptcha on unmount
+  useEffect(() => () => { recaptchaRef.current?.clear(); }, []);
 
   // If phone changes after verification, reset verification
   const prevPhoneRef = useRef(form.phone);
@@ -83,28 +90,43 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
     }
   };
 
-  const sendOTP = () => {
+  const sendOTP = async () => {
     const raw = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '');
     if (!isValidIndianPhone(raw)) {
       setErrors(e => ({ ...e, phone: 'Enter a valid 10-digit Indian mobile number (starts with 6–9)' }));
       return;
     }
-    const code = genOTP();
-    setOtpCode(code);
-    setOtpInput('');
+    setIsSending(true);
     setOtpError('');
-    setOtpSent(true);
-    setCountdown(OTP_TTL);
-    setResendWait(30);
+    try {
+      const vAuth = getVerifyAuth();
+      if (!recaptchaRef.current && recaptchaElRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(vAuth, recaptchaElRef.current, { size: 'invisible' });
+      }
+      confirmRef.current = await signInWithPhoneNumber(vAuth, `+91${raw}`, recaptchaRef.current!);
+      setOtpInput('');
+      setOtpSent(true);
+      setCountdown(OTP_TTL);
+      setResendWait(30);
+    } catch (e: any) {
+      setOtpError(e?.message ?? 'Failed to send OTP. Try again.');
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const verifyOTP = () => {
+  const verifyOTP = async () => {
+    if (!confirmRef.current) { setOtpError('Session lost. Resend OTP.'); return; }
     if (countdown <= 0) { setOtpError('OTP expired. Send a new one.'); return; }
-    if (otpInput.trim() === otpCode) {
+    try {
+      await confirmRef.current.confirm(otpInput.trim());
       setPhoneVerified(true);
       setOtpSent(false);
       clearInterval(timerRef.current!);
-    } else {
+      await getVerifyAuth().signOut().catch(() => {});
+    } catch {
       setOtpError('Incorrect OTP. Please try again.');
     }
   };
@@ -216,9 +238,9 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
                     errors.phone  ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-indigo-500'
                   }`} />
                 {isNew && !phoneVerified && !otpSent && (
-                  <button type="button" onClick={sendOTP}
-                    className="whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
-                    Send OTP
+                  <button type="button" onClick={sendOTP} disabled={isSending}
+                    className="whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
+                    {isSending ? 'Sending…' : 'Send OTP'}
                   </button>
                 )}
                 {phoneVerified && isNew && (
@@ -230,22 +252,19 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
               </div>
               <FieldErr msg={errors.phone} />
 
+              {/* Hidden recaptcha container for invisible reCAPTCHA */}
+              <div ref={recaptchaElRef} />
+
               {/* OTP panel */}
               {isNew && otpSent && !phoneVerified && (
                 <div className="mt-3 bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs font-semibold text-blue-800">📨 OTP sent to +91 {form.phone.replace(/^\+91\s?/, '')}</div>
-                      <div className="text-xs text-blue-600 mt-0.5">Valid for {fmtTime(countdown)}</div>
+                      <div className="text-xs text-blue-600 mt-0.5">Check SMS · Valid for {fmtTime(countdown)}</div>
                     </div>
                     <span className={`text-sm font-bold tabular-nums ${countdown < 60 ? 'text-red-500' : 'text-blue-600'}`}>{fmtTime(countdown)}</span>
                   </div>
-                  {/* Demo OTP */}
-                  <div className="flex items-center gap-2 bg-white border border-blue-100 rounded-lg px-3 py-2">
-                    <span className="text-[10px] text-blue-400">🔬 Demo OTP:</span>
-                    <code className="text-base font-bold font-mono tracking-[0.3em] text-blue-700 select-all">{otpCode}</code>
-                  </div>
-                  {/* OTP input */}
                   <div className="flex gap-2">
                     <input
                       type="text" inputMode="numeric" maxLength={6} value={otpInput}
@@ -264,7 +283,7 @@ function AgentModal({ onClose, onSave, existing, agentCount }: {
                   <div className="flex justify-between text-xs">
                     {resendWait > 0
                       ? <span className="text-gray-400">Resend in {resendWait}s</span>
-                      : <button type="button" onClick={sendOTP} className="text-indigo-600 hover:underline font-medium">Resend OTP</button>
+                      : <button type="button" onClick={sendOTP} disabled={isSending} className="text-indigo-600 hover:underline font-medium disabled:opacity-50">Resend OTP</button>
                     }
                     <button type="button" onClick={() => { setOtpSent(false); setOtpInput(''); setOtpError(''); }}
                       className="text-gray-400 hover:text-gray-600">← Change number</button>
@@ -388,9 +407,34 @@ export default function AgentsPage() {
 
   const agentCount = (city: string) => agents.filter(a => a.city === city && (a.role === 'agent' || !a.role)).length;
 
-  const handleSave = (agent: AdminAgent) => {
-    if (editing) updateAgent(agent);
-    else createAgent({ ...agent, role: 'agent' });
+  const handleSave = async (agent: AdminAgent) => {
+    if (editing) {
+      updateAgent(agent);
+    } else {
+      const data = { ...agent, role: 'agent' as const };
+      createAgent(data);
+      // Persist to Firestore so Flutter app can find agent by phone
+      try {
+        await setDoc(doc(db, 'agents', agent.id), {
+          name:           agent.name,
+          phone:          agent.phone,
+          email:          agent.email ?? '',
+          city:           agent.city,
+          state:          agent.state,
+          role:           'agent',
+          status:         'pending',
+          agentId:        agent.id,
+          commissionRate: agent.commissionRate,
+          specialties:    agent.specialties ?? [],
+          bank:           agent.bank ?? '',
+          upi:            agent.upi ?? '',
+          phoneVerified:  true,
+          createdAt:      serverTimestamp(),
+        });
+      } catch (e) {
+        console.error('Firestore save failed:', e);
+      }
+    }
     setModal(null); setEditing(undefined);
   };
 

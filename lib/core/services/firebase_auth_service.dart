@@ -4,12 +4,13 @@ import 'package:flutter/foundation.dart';
 class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Stream of auth state changes
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  // Holds web ConfirmationResult between sendOtp and verifyOtp
+  ConfirmationResult? _confirmationResult;
 
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
-  // Send OTP to phone number (e.g. "+919876543210")
+  // Send OTP — web uses signInWithPhoneNumber; mobile uses verifyPhoneNumber
   Future<void> sendOtp({
     required String phoneNumber,
     required void Function(PhoneAuthCredential) onAutoVerified,
@@ -17,21 +18,47 @@ class FirebaseAuthService {
     required void Function(String verificationId, int? resendToken) onCodeSent,
     required void Function(String verificationId) onTimeout,
   }) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      verificationCompleted: onAutoVerified,
-      verificationFailed: onFailed,
-      codeSent: onCodeSent,
-      codeAutoRetrievalTimeout: onTimeout,
-      timeout: const Duration(seconds: 60),
-    );
+    if (kIsWeb) {
+      try {
+        // signInWithPhoneNumber creates an invisible RecaptchaVerifier internally
+        // when no verifier is supplied — avoids the FirebaseAuthPlatform type issue
+        _confirmationResult = await _auth.signInWithPhoneNumber(phoneNumber);
+        // Use a sentinel verificationId so auth_provider knows OTP was sent
+        onCodeSent('web-otp', null);
+      } on FirebaseAuthException catch (e) {
+        onFailed(e);
+      } catch (e) {
+        onFailed(FirebaseAuthException(
+          code: 'web-error',
+          message: e.toString(),
+        ));
+      }
+    } else {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: onAutoVerified,
+        verificationFailed: onFailed,
+        codeSent: onCodeSent,
+        codeAutoRetrievalTimeout: onTimeout,
+        timeout: const Duration(seconds: 60),
+      );
+    }
   }
 
-  // Verify OTP and sign in
+  // Verify OTP — web uses ConfirmationResult.confirm(); mobile uses credential
   Future<UserCredential?> verifyOtp({
     required String verificationId,
     required String smsCode,
   }) async {
+    if (kIsWeb) {
+      if (_confirmationResult == null) {
+        throw FirebaseAuthException(
+          code: 'session-expired',
+          message: 'OTP session expired. Please resend.',
+        );
+      }
+      return await _confirmationResult!.confirm(smsCode);
+    }
     final credential = PhoneAuthProvider.credential(
       verificationId: verificationId,
       smsCode: smsCode,
@@ -39,7 +66,6 @@ class FirebaseAuthService {
     return await _auth.signInWithCredential(credential);
   }
 
-  // Sign in with auto-retrieved credential (Android)
   Future<UserCredential?> signInWithCredential(
     PhoneAuthCredential credential,
   ) async {
@@ -47,6 +73,7 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
+    _confirmationResult = null;
     await _auth.signOut();
   }
 

@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { signInWithPhoneNumber, RecaptchaVerifier, ConfirmationResult } from 'firebase/auth';
 import { useStore } from '@/lib/store';
+import { db, getVerifyAuth, doc, setDoc, serverTimestamp } from '@/lib/firebase';
 import { AdminAgent, AgentStatus, STATUS_BADGE, CITY_CODES, generateAgentId, fmtINR, fmtL } from '@/lib/admin-data';
 
 const CITIES = Object.keys(CITY_CODES);
@@ -15,7 +17,6 @@ const isValidIndianPhone = (raw: string) =>
 const isValidName  = (v: string) =>
   v.trim().length >= 2 && v.trim().length <= 60 && /^[a-zA-Z\s\-.']+$/.test(v.trim());
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-const genOTP       = () => String(Math.floor(100000 + Math.random() * 900000));
 const OTP_TTL      = 5 * 60;
 const fmtTime      = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -44,12 +45,15 @@ function ManagerModal({ onClose, onSave, existing, managerCount }: {
   const alreadyVerified = existing?.phoneVerified ?? false;
   const [phoneVerified, setPhoneVerified] = useState(alreadyVerified);
   const [otpSent,    setOtpSent]    = useState(false);
-  const [otpCode,    setOtpCode]    = useState('');
   const [otpInput,   setOtpInput]   = useState('');
   const [otpError,   setOtpError]   = useState('');
+  const [isSending,  setIsSending]  = useState(false);
   const [countdown,  setCountdown]  = useState(0);
   const [resendWait, setResendWait] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recaptchaRef   = useRef<RecaptchaVerifier | null>(null);
+  const confirmRef     = useRef<ConfirmationResult | null>(null);
+  const recaptchaElRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -59,6 +63,9 @@ function ManagerModal({ onClose, onSave, existing, managerCount }: {
     }, 1000);
     return () => clearInterval(timerRef.current!);
   }, [otpSent]);
+
+  // Cleanup recaptcha on unmount
+  useEffect(() => () => { recaptchaRef.current?.clear(); }, []);
 
   const prevPhoneRef = useRef(form.phone);
   const handlePhoneChange = (val: string) => {
@@ -70,24 +77,34 @@ function ManagerModal({ onClose, onSave, existing, managerCount }: {
     }
   };
 
-  const sendOTP = () => {
+  const sendOTP = async () => {
     const raw = form.phone.replace(/[\s\-()]/g, '').replace(/^\+91/, '');
     if (!isValidIndianPhone(raw)) {
       setErrors(e => ({ ...e, phone: 'Enter a valid 10-digit Indian mobile number' }));
       return;
     }
-    const code = genOTP();
-    setOtpCode(code); setOtpInput(''); setOtpError('');
-    setOtpSent(true); setCountdown(OTP_TTL); setResendWait(30);
+    setIsSending(true); setOtpError('');
+    try {
+      const vAuth = getVerifyAuth();
+      if (!recaptchaRef.current && recaptchaElRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(vAuth, recaptchaElRef.current, { size: 'invisible' });
+      }
+      confirmRef.current = await signInWithPhoneNumber(vAuth, `+91${raw}`, recaptchaRef.current!);
+      setOtpInput(''); setOtpSent(true); setCountdown(OTP_TTL); setResendWait(30);
+    } catch (e: any) {
+      setOtpError(e?.message ?? 'Failed to send OTP. Try again.');
+      recaptchaRef.current?.clear(); recaptchaRef.current = null;
+    } finally { setIsSending(false); }
   };
 
-  const verifyOTP = () => {
+  const verifyOTP = async () => {
+    if (!confirmRef.current) { setOtpError('Session lost. Resend OTP.'); return; }
     if (countdown <= 0) { setOtpError('OTP expired. Send a new one.'); return; }
-    if (otpInput.trim() === otpCode) {
+    try {
+      await confirmRef.current.confirm(otpInput.trim());
       setPhoneVerified(true); setOtpSent(false); clearInterval(timerRef.current!);
-    } else {
-      setOtpError('Incorrect OTP. Please try again.');
-    }
+      await getVerifyAuth().signOut().catch(() => {});
+    } catch { setOtpError('Incorrect OTP. Please try again.'); }
   };
 
   const setCity = (city: string) => setForm(f => ({ ...f, city, state: CITY_STATE[city] ?? f.state }));
@@ -192,9 +209,9 @@ function ManagerModal({ onClose, onSave, existing, managerCount }: {
                   phoneVerified ? 'border-emerald-300 bg-emerald-50/50 text-emerald-800 cursor-not-allowed'
                     : errors.phone ? 'border-red-400 focus:ring-red-300 bg-red-50/30' : 'border-gray-200 focus:ring-purple-500'}`} />
               {isNew && !phoneVerified && !otpSent && (
-                <button type="button" onClick={sendOTP}
-                  className="whitespace-nowrap bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
-                  Send OTP
+                <button type="button" onClick={sendOTP} disabled={isSending}
+                  className="whitespace-nowrap bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+                  {isSending ? 'Sending…' : 'Send OTP'}
                 </button>
               )}
               {phoneVerified && isNew && (
@@ -206,19 +223,18 @@ function ManagerModal({ onClose, onSave, existing, managerCount }: {
             </div>
             <FieldErr msg={errors.phone} />
 
+            {/* Hidden recaptcha container */}
+            <div ref={recaptchaElRef} />
+
             {/* OTP panel */}
             {isNew && otpSent && !phoneVerified && (
               <div className="mt-3 bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold text-purple-800">📨 OTP sent to +91 {form.phone.replace(/^\+91\s?/, '')}</div>
-                    <div className="text-xs text-purple-500 mt-0.5">Expires in {fmtTime(countdown)}</div>
+                    <div className="text-xs text-purple-500 mt-0.5">Check SMS · Expires in {fmtTime(countdown)}</div>
                   </div>
                   <span className={`text-sm font-bold tabular-nums ${countdown < 60 ? 'text-red-500' : 'text-purple-600'}`}>{fmtTime(countdown)}</span>
-                </div>
-                <div className="flex items-center gap-2 bg-white border border-purple-100 rounded-lg px-3 py-2">
-                  <span className="text-[10px] text-purple-400">🔬 Demo OTP:</span>
-                  <code className="text-base font-bold font-mono tracking-[0.35em] text-purple-700 select-all">{otpCode}</code>
                 </div>
                 <div className="flex gap-2">
                   <input type="text" inputMode="numeric" maxLength={6} value={otpInput}
@@ -333,9 +349,30 @@ export default function ManagersPage() {
     return { team, active, pending, thisMonth, totalEarned, teamPats, completed, ipd, convRate, pendAmt, topAgent };
   };
 
-  const handleSave = (agent: AdminAgent) => {
-    if (editing) updateAgent(agent);
-    else createAgent({ ...agent, role: 'manager' });
+  const handleSave = async (agent: AdminAgent) => {
+    if (editing) {
+      updateAgent(agent);
+    } else {
+      createAgent({ ...agent, role: 'manager' });
+      // Persist to Firestore so Flutter app can find manager by phone
+      try {
+        await setDoc(doc(db, 'agents', agent.id), {
+          name:           agent.name,
+          phone:          agent.phone,
+          email:          agent.email ?? '',
+          city:           agent.city,
+          state:          agent.state,
+          role:           'manager',
+          status:         'active',
+          agentId:        agent.id,
+          commissionRate: 0,
+          phoneVerified:  true,
+          createdAt:      serverTimestamp(),
+        });
+      } catch (e) {
+        console.error('Firestore save failed:', e);
+      }
+    }
     setModal(null); setEditing(undefined);
   };
 
