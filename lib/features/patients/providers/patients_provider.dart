@@ -6,12 +6,16 @@ import '../models/patient_model.dart';
 
 // ── Patients State ────────────────────────────────────────────────────────────
 
+/// 'recent' | 'name' | 'commission'
+typedef SortMode = String;
+
 class PatientsState {
   final List<PatientModel> patients;
   final bool isLoading;
   final String? error;
   final String statusFilter;
   final String searchQuery;
+  final SortMode sortMode;
 
   const PatientsState({
     this.patients = const [],
@@ -19,6 +23,7 @@ class PatientsState {
     this.error,
     this.statusFilter = 'all',
     this.searchQuery = '',
+    this.sortMode = 'recent',
   });
 
   PatientsState copyWith({
@@ -27,6 +32,7 @@ class PatientsState {
     String? error,
     String? statusFilter,
     String? searchQuery,
+    SortMode? sortMode,
   }) {
     return PatientsState(
       patients: patients ?? this.patients,
@@ -34,11 +40,12 @@ class PatientsState {
       error: error,
       statusFilter: statusFilter ?? this.statusFilter,
       searchQuery: searchQuery ?? this.searchQuery,
+      sortMode: sortMode ?? this.sortMode,
     );
   }
 
   List<PatientModel> get filteredPatients {
-    var list = patients;
+    var list = patients.toList();
 
     if (statusFilter != 'all') {
       list = list.where((p) => _matchesFilter(p.status, statusFilter)).toList();
@@ -52,6 +59,20 @@ class PatientsState {
               p.phone.contains(q) ||
               p.specialty.toLowerCase().contains(q))
           .toList();
+    }
+
+    // Apply sort
+    switch (sortMode) {
+      case 'name':
+        list.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case 'commission':
+        list.sort((a, b) => b.expectedCommission.compareTo(a.expectedCommission));
+        break;
+      case 'recent':
+      default:
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
     }
 
     return list;
@@ -103,6 +124,10 @@ class PatientsNotifier extends StateNotifier<PatientsState> {
 
   void setSearchQuery(String query) {
     state = state.copyWith(searchQuery: query);
+  }
+
+  void setSortMode(SortMode mode) {
+    state = state.copyWith(sortMode: mode);
   }
 
   Future<bool> addPatient(Map<String, dynamic> formData) async {

@@ -169,6 +169,9 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
   }
 
   void _showSortOptions() {
+    final notifier = ref.read(patientsProvider.notifier);
+    final current = ref.read(patientsProvider).sortMode;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -190,13 +193,32 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
             ),
             const SizedBox(height: 16),
             _SortOption(
-                label: 'Recent First',
-                icon: Icons.access_time,
-                selected: true),
-            _SortOption(label: 'Name A-Z', icon: Icons.sort_by_alpha),
+              label: 'Recent First',
+              icon: Icons.access_time,
+              selected: current == 'recent',
+              onTap: () {
+                notifier.setSortMode('recent');
+                Navigator.pop(context);
+              },
+            ),
             _SortOption(
-                label: 'Commission: High to Low',
-                icon: Icons.currency_rupee),
+              label: 'Name A–Z',
+              icon: Icons.sort_by_alpha,
+              selected: current == 'name',
+              onTap: () {
+                notifier.setSortMode('name');
+                Navigator.pop(context);
+              },
+            ),
+            _SortOption(
+              label: 'Commission: High to Low',
+              icon: Icons.currency_rupee,
+              selected: current == 'commission',
+              onTap: () {
+                notifier.setSortMode('commission');
+                Navigator.pop(context);
+              },
+            ),
           ],
         ),
       ),
@@ -269,11 +291,13 @@ class _SortOption extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
+  final VoidCallback? onTap;
 
   const _SortOption({
     required this.label,
     required this.icon,
     this.selected = false,
+    this.onTap,
   });
 
   @override
@@ -291,7 +315,7 @@ class _SortOption extends StatelessWidget {
       trailing: selected
           ? const Icon(Icons.check, color: AppColors.primary, size: 18)
           : null,
-      onTap: () => Navigator.pop(context),
+      onTap: onTap ?? () => Navigator.pop(context),
       contentPadding: EdgeInsets.zero,
     );
   }
