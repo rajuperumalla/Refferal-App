@@ -57,7 +57,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     if (success && mounted) {
       final user = ref.read(currentUserProvider);
       final role = user?.role ?? 'agent';
-      context.go(role == 'manager' ? '/manager/home' : '/home');
+      context.go((role == 'manager' || role == 'admin') ? '/manager/home' : '/home');
     }
   }
 

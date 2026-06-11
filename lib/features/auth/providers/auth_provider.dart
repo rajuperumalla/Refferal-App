@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../models/user_model.dart';
 
 class AuthState {
@@ -88,6 +89,7 @@ class AuthNotifier extends Notifier<AuthState> {
         isLoading: false,
         user: user,
       );
+      PushNotificationService().initialize(uid);
     } catch (_) {
       state = state.copyWith(isLoading: false);
     }
@@ -96,6 +98,21 @@ class AuthNotifier extends Notifier<AuthState> {
   // Step 1: send OTP
   Future<bool> sendOtp(String phone) async {
     state = state.copyWith(isLoading: true, error: null, otpSent: false);
+
+    // BYPASS FOR MOCK DEMO
+    if (phone.endsWith('9999999999') || 
+        phone.endsWith('8888888888') || 
+        phone.endsWith('7777777777') ||
+        phone.endsWith('1111') ||
+        phone.endsWith('0000')) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      state = state.copyWith(
+        isLoading: false,
+        verificationId: 'mock-verification-id:$phone',
+        otpSent: true,
+      );
+      return true;
+    }
 
     bool success = false;
 
@@ -129,6 +146,24 @@ class AuthNotifier extends Notifier<AuthState> {
 
   // Step 2: verify OTP
   Future<bool> verifyOtp(String smsCode) async {
+    final verId = state.verificationId ?? '';
+    if (verId.startsWith('mock-verification-id')) {
+      final parts = verId.split(':');
+      final phone = parts.length > 1 ? parts[1] : '';
+
+      String uid = 'mock-agent-uid';
+      if (phone.endsWith('8888888888') || phone.endsWith('1111')) {
+        uid = 'mock-manager-uid';
+      } else if (phone.endsWith('7777777777') || phone.endsWith('0000')) {
+        uid = 'mock-admin-uid';
+      }
+
+      state = state.copyWith(isLoading: true, error: null);
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _loadUserModel(uid);
+      return true;
+    }
+
     if (state.verificationId == null) {
       state = state.copyWith(error: 'Session expired. Please resend OTP.');
       return false;
@@ -167,6 +202,10 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    final uid = state.user?.id;
+    if (uid != null) {
+      await PushNotificationService().clearToken(uid);
+    }
     await firebaseAuthService.signOut();
     state = const AuthState();
   }
