@@ -117,13 +117,18 @@ export default function LoginPage() {
                 <p className="text-gray-500 text-sm mb-6">Sent to <strong className="text-gray-800">+91 {phone}</strong></p>
                 <div className="flex gap-2 mb-5">
                   {otp.map((v, i) => (
-                    <input key={i} id={`otp-${i}`} type="text" maxLength={1} value={v}
+                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" maxLength={1} value={v}
                       onChange={e => {
                         const val = e.target.value.replace(/\D/,'');
                         const next = [...otp]; next[i] = val; setOtp(next);
                         if (val && i < 5) (document.getElementById(`otp-${i+1}`) as HTMLInputElement)?.focus();
                       }}
-                      className="flex-1 h-14 border-2 border-gray-200 rounded-xl text-center text-xl font-bold focus:outline-none focus:border-blue-500 text-gray-900 transition-all"
+                      onKeyDown={e => {
+                        if (e.key === 'Backspace' && !otp[i] && i > 0) {
+                          (document.getElementById(`otp-${i-1}`) as HTMLInputElement)?.focus();
+                        }
+                      }}
+                      className="flex-1 min-w-0 w-0 aspect-square max-h-14 border-2 border-gray-200 rounded-xl text-center text-xl font-bold focus:outline-none focus:border-blue-500 text-gray-900 transition-all"
                     />
                   ))}
                 </div>

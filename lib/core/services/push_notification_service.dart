@@ -2,7 +2,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'firestore_service.dart';
+
+// Global key so we can show SnackBars for foreground push notifications
+// from outside the widget tree.
+final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 class PushNotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -67,10 +72,34 @@ class PushNotificationService {
           });
         });
 
-        // 5. Foreground message handler
+        // 5. Foreground message handler — show SnackBar
         _onMessageSubscription?.cancel();
         _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          debugPrint('[PushNotificationService] Received a foreground message: ${message.notification?.title}');
+          final title = message.notification?.title ?? 'Notification';
+          final body = message.notification?.body ?? '';
+          debugPrint('[PushNotificationService] Foreground message: $title');
+          scaffoldMessengerKey.currentState?.showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  if (body.isNotEmpty)
+                    Text(body, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1565C0),
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              action: SnackBarAction(
+                label: 'View',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
         });
       }
     } catch (e) {

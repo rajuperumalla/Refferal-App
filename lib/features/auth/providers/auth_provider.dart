@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/firebase_auth_service.dart';
@@ -114,19 +116,23 @@ class AuthNotifier extends Notifier<AuthState> {
       return true;
     }
 
-    bool success = false;
+    // verifyPhoneNumber returns before codeSent fires (on mobile), so wait on
+    // a Completer resolved by the first terminal callback.
+    final completer = Completer<bool>();
 
     await firebaseAuthService.sendOtp(
       phoneNumber: phone,
       onAutoVerified: (credential) async {
-        // Android auto-retrieval
+        // Android auto-retrieval — signs in directly, no OTP screen needed
         await _signInWithCredential(credential);
+        if (!completer.isCompleted) completer.complete(false);
       },
       onFailed: (e) {
         state = state.copyWith(
           isLoading: false,
           error: _authErrorMessage(e),
         );
+        if (!completer.isCompleted) completer.complete(false);
       },
       onCodeSent: (verificationId, _) {
         state = state.copyWith(
@@ -134,14 +140,23 @@ class AuthNotifier extends Notifier<AuthState> {
           verificationId: verificationId,
           otpSent: true,
         );
-        success = true;
+        if (!completer.isCompleted) completer.complete(true);
       },
       onTimeout: (_) {
-        state = state.copyWith(isLoading: false);
+        // Auto-retrieval timed out, but the code was already sent — ignore.
       },
     );
 
-    return success;
+    return completer.future.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Could not send OTP. Please try again.',
+        );
+        return false;
+      },
+    );
   }
 
   // Step 2: verify OTP
