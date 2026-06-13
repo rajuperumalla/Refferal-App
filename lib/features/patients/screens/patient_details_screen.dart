@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timeline_tile/timeline_tile.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../models/patient_model.dart';
@@ -522,42 +523,7 @@ class _BottomActions extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Update Status',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            ...PatientStatus.values
-                .where((s) => s != PatientStatus.lost)
-                .map((s) => ListTile(
-                      leading: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: s.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      title: Text(s.label),
-                      selected: patient.status == s,
-                      selectedTileColor: s.color.withOpacity(0.08),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Status updated to ${s.label}')),
-                        );
-                      },
-                    )),
-          ],
-        ),
-      ),
+      builder: (ctx) => _UpdateStatusSheet(patient: patient),
     );
   }
 }
@@ -646,6 +612,93 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
+
+// ─── Update Status Sheet ──────────────────────────────────────────────────────
+
+class _UpdateStatusSheet extends ConsumerStatefulWidget {
+  final PatientModel patient;
+
+  const _UpdateStatusSheet({required this.patient});
+
+  @override
+  ConsumerState<_UpdateStatusSheet> createState() => _UpdateStatusSheetState();
+}
+
+class _UpdateStatusSheetState extends ConsumerState<_UpdateStatusSheet> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Update Status',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          ...PatientStatus.values.map((s) => ListTile(
+                leading: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
+                ),
+                title: Text(s.label),
+                selected: widget.patient.status == s,
+                selectedTileColor: s.color.withOpacity(0.08),
+                trailing: _saving && widget.patient.status == s
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap: _saving
+                    ? null
+                    : () async {
+                        setState(() => _saving = true);
+                        // Derive Firestore-compatible status string
+                        final statusStr = _statusToString(s);
+                        await firestoreService.updatePatient(
+                          widget.patient.id.toString(),
+                          {'status': statusStr},
+                        );
+                        // Refresh list
+                        ref.invalidate(patientsStreamProvider);
+                        if (context.mounted) Navigator.pop(context);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Status updated to ${s.label}'),
+                              backgroundColor: AppColors.secondary,
+                            ),
+                          );
+                        }
+                      },
+              )),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  String _statusToString(PatientStatus s) {
+    switch (s) {
+      case PatientStatus.newLead:     return 'new';
+      case PatientStatus.contacted:   return 'contacted';
+      case PatientStatus.opdScheduled: return 'opd_scheduled';
+      case PatientStatus.ipdConfirmed: return 'ipd_confirmed';
+      case PatientStatus.completed:   return 'completed';
+      case PatientStatus.lost:        return 'lost';
+    }
+  }
+}
+
+// ─── Mini Action ──────────────────────────────────────────────────────────────
 
 class _MiniAction extends StatelessWidget {
   final IconData icon;

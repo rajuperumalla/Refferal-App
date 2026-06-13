@@ -14,6 +14,12 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    section: 'Team',
+    items: [
+      { href: '/admin/managers', icon: '🧑‍💼', label: 'Managers' },
+    ],
+  },
+  {
     section: 'Management',
     items: [
       { href: '/admin/agents',      icon: '👥', label: 'Agents' },
@@ -25,7 +31,7 @@ const NAV: NavGroup[] = [
     section: 'Network',
     items: [
       { href: '/admin/hospitals',          icon: '🏨', label: 'Hospitals' },
-      { href: '/admin/bank-verifications', icon: '🏦', label: 'Bank Verifications' },
+      { href: '/admin/bank-verifications', icon: '🔐', label: 'Verifications' },
     ],
   },
   {

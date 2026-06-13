@@ -38,7 +38,7 @@ const EMPTY_FORM: MopForm = {
 };
 
 export default function AdminPatientsPage() {
-  const { patients, agents, updatePatientStatus, setMOP } = useStore();
+  const { patients, agents, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate, setCompletionDate } = useStore();
 
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -48,6 +48,8 @@ export default function AdminPatientsPage() {
   const [mopPatientId, setMopPatientId] = useState<number | null>(null);
   const [mopForm,      setMopForm]      = useState<MopForm>(EMPTY_FORM);
   const [toast,        setToast]        = useState<string | null>(null);
+  const [appointmentModal, setAppointmentModal] = useState<{ patientId: number; type: 'opd' | 'ipd' | 'completed'; patientName: string } | null>(null);
+  const [appointmentDateTime, setAppointmentDateTime] = useState('');
 
   const activeAgents = agents.filter(a => a.status === 'active');
 
@@ -78,12 +80,33 @@ export default function AdminPatientsPage() {
   };
 
   const handleStatusChange = (patientId: number, newStatus: string, patientName: string) => {
+    // Date-driven milestones open a date-picker modal so the admin can set the date:
+    //   → OPD Scheduled  : admin sets the OPD appointment date
+    //   → IPD Confirmed  : admin sets the IPD admission date
+    //   → Completed      : admin sets the treatment completion date
+    if (newStatus === 'opd_scheduled') {
+      setAppointmentModal({ patientId, type: 'opd', patientName });
+      setAppointmentDateTime('');
+      setEditingId(null);
+      return;
+    }
+    if (newStatus === 'ipd_confirmed') {
+      setAppointmentModal({ patientId, type: 'ipd', patientName });
+      setAppointmentDateTime('');
+      setEditingId(null);
+      return;
+    }
+    if (newStatus === 'completed') {
+      setAppointmentModal({ patientId, type: 'completed', patientName });
+      setAppointmentDateTime('');
+      setEditingId(null);
+      return;
+    }
+    // "contacted" and "lost" update directly (contactedAt auto-recorded by the store)
     updatePatientStatus(patientId, newStatus);
     setEditingId(null);
-    const msg = newStatus === 'ipd_confirmed'
-      ? `✅ ${patientName} → IPD Confirmed. Commission queued for approval!`
-      : newStatus === 'completed'
-      ? `🎉 ${patientName} → Completed. Now set MOP & ticket size.`
+    const msg = newStatus === 'contacted'
+      ? `☎️ ${patientName} → Contacted. Now schedule OPD or mark Lost.`
       : newStatus === 'lost'
       ? `❌ ${patientName} marked as Lost.`
       : `📋 ${patientName} → ${STATUS_LABELS[newStatus] ?? newStatus}`;
@@ -103,6 +126,30 @@ export default function AdminPatientsPage() {
     });
     setMopPatientId(patientId);
     setEditingId(null);
+  };
+
+  const confirmAppointmentDate = () => {
+    if (!appointmentModal || !appointmentDateTime) return;
+    const { patientId, type, patientName } = appointmentModal;
+    const when = new Date(appointmentDateTime).toLocaleString('en-IN');
+
+    if (type === 'opd') {
+      // Save OPD date first, then advance status to OPD Scheduled
+      setOPDAppointmentDate(patientId, appointmentDateTime);
+      updatePatientStatus(patientId, 'opd_scheduled');
+      showToast(`📅 OPD scheduled for ${patientName} on ${when}`);
+    } else if (type === 'ipd') {
+      // Save IPD date, advance to IPD Confirmed (store auto-creates commission)
+      setIPDConfirmationDate(patientId, appointmentDateTime);
+      updatePatientStatus(patientId, 'ipd_confirmed');
+      showToast(`🏥 IPD admission confirmed for ${patientName} on ${when}`);
+    } else {
+      // Completion: setCompletionDate sets status=completed + approves commission
+      setCompletionDate(patientId, appointmentDateTime);
+      showToast(`✅ ${patientName} completed on ${when}. Now set MOP & ticket size.`);
+    }
+    setAppointmentModal(null);
+    setAppointmentDateTime('');
   };
 
   const confirmMOP = (patientId: number, patientName: string) => {
@@ -594,6 +641,70 @@ export default function AdminPatientsPage() {
           </table>
         </div>
       </div>
+
+      {/* Appointment / Milestone Date Modal */}
+      {appointmentModal && (() => {
+        const mCfg = {
+          opd:       { icon: '📅', title: 'Schedule OPD Appointment', desc: 'Select the date and time for the OPD appointment.',  label: 'OPD Appointment Date & Time',  cta: '✓ Schedule OPD',  accent: 'border-blue-300 focus:border-blue-500',   btn: 'bg-blue-600 hover:bg-blue-700' },
+          ipd:       { icon: '🏥', title: 'Confirm IPD Admission',     desc: 'Select the date and time for the IPD admission.',      label: 'IPD Admission Date & Time',     cta: '✓ Confirm IPD',   accent: 'border-purple-300 focus:border-purple-500', btn: 'bg-purple-600 hover:bg-purple-700' },
+          completed: { icon: '✅', title: 'Mark Treatment Completed',  desc: 'Select the date and time the treatment was completed.', label: 'Completion Date & Time',       cta: '✓ Mark Completed', accent: 'border-emerald-300 focus:border-emerald-500', btn: 'bg-emerald-600 hover:bg-emerald-700' },
+        }[appointmentModal.type];
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-6">
+            {/* Header */}
+            <div className="space-y-2">
+              <div className="text-2xl font-bold text-gray-900">{mCfg.icon} {mCfg.title}</div>
+              <div className="text-sm text-gray-600">
+                Patient: <span className="font-semibold">{appointmentModal.patientName}</span>
+              </div>
+              <div className="text-xs text-gray-500">{mCfg.desc}</div>
+            </div>
+
+            {/* Date & Time Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 block">{mCfg.label}</label>
+              <input
+                type="datetime-local"
+                value={appointmentDateTime}
+                onChange={e => setAppointmentDateTime(e.target.value)}
+                className={`w-full border-2 ${mCfg.accent} rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none bg-white transition-colors`}
+              />
+              {appointmentDateTime && (
+                <div className="text-xs text-gray-500 mt-2">
+                  Selected: {new Date(appointmentDateTime).toLocaleString('en-IN', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setAppointmentModal(null);
+                  setAppointmentDateTime('');
+                }}
+                className="flex-1 px-4 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold text-sm transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={confirmAppointmentDate}
+                disabled={!appointmentDateTime}
+                className={`flex-1 px-4 py-2.5 ${mCfg.btn} disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm transition-colors`}>
+                {mCfg.cta}
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 }

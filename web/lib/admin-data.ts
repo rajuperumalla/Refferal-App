@@ -1,14 +1,39 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type UserRole = 'agent' | 'manager' | 'admin';
 export type AgentStatus = 'active' | 'inactive' | 'pending' | 'suspended';
 export type HospitalTier = 'preferred' | 'standard' | 'basic';
 
+export type KYCStatus = 'not_submitted' | 'submitted' | 'approved' | 'rejected';
+
+export interface KYCRequest {
+  id: number;
+  agentId: string;
+  agentName: string;
+  phone: string;
+  submittedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  aadhaarNumber: string;  // stored masked: XXXX-XXXX-1234
+  panNumber: string;      // stored masked: XXXXX9999A
+  aadhaarDoc: string;     // filename
+  panDoc: string;         // filename
+  profilePhoto?: string;  // filename
+  rejectionReason?: string;
+  reviewedAt?: string;
+}
+
 export interface AdminAgent {
   id: string;
+  role: UserRole;
   name: string;
   phone: string;
+  phoneVerified?: boolean;
   email?: string;
   emailVerified?: boolean;
+  kycStatus?: KYCStatus;
+  kycSubmittedAt?: string;
+  kycApprovedAt?: string;
+  kycRejectedReason?: string;
   city: string;
   state: string;
   status: AgentStatus;
@@ -23,6 +48,7 @@ export interface AdminAgent {
   bank: string;
   upi: string;
   specialties: string[];
+  managerId?: string;   // set for agents — which manager they report to
 }
 
 export type MopType = 'cash' | 'insurance' | 'reimbursement' | 'loan';
@@ -65,6 +91,15 @@ export interface AdminPatient {
   agentId: string;
   agentName: string;
   createdAt: string;
+  // Contact tracking
+  contactedAt?: string;      // ISO timestamp when agent contacted patient
+  contactMethod?: 'call' | 'whatsapp' | 'sms' | 'email';
+  // OPD to IPD conversion tracking
+  opdScheduledAt?: string;    // ISO timestamp when OPD appointment scheduled (set by admin)
+  opdToIpdAt?: string;        // ISO timestamp when patient converted from OPD to IPD
+  ipdConfirmedAt?: string;    // ISO timestamp when IPD admission confirmed (set by admin)
+  completedAt?: string;       // ISO timestamp when surgery/treatment completed (set by admin)
+  conversionDays?: number;    // Days between creation and OPD→IPD conversion
   // MOP fields (set after completion)
   mop?: MopType;
   ticketSize?: number;
@@ -124,7 +159,7 @@ export interface AdminHospital {
 
 export interface ActivityLog {
   id: number;
-  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated' | 'mop_set';
+  type: 'agent_created' | 'commission_approved' | 'patient_added' | 'commission_paid' | 'agent_suspended' | 'commission_rejected' | 'bank_verified' | 'bank_rejected' | 'patient_status_updated' | 'mop_set' | 'kyc_submitted' | 'kyc_approved' | 'kyc_rejected' | 'opd_scheduled' | 'ipd_confirmed' | 'patient_completed';
   title: string;
   detail: string;
   time: string;
@@ -138,114 +173,79 @@ export const CITY_CODES: Record<string, string> = {
   'Chennai': 'CHN', 'Pune': 'PNE', 'Kolkata': 'KOL', 'Ahmedabad': 'AMD',
 };
 
-export function generateAgentId(city: string, seq: number): string {
+export function generateAgentId(city: string, seq: number, role: UserRole = 'agent'): string {
   const code = CITY_CODES[city] ?? 'GEN';
-  return `AG-${code}-${String(seq).padStart(3, '0')}`;
+  const prefix = role === 'manager' ? 'MG' : 'AG';
+  return `${prefix}-${code}-${String(seq).padStart(3, '0')}`;
 }
 
 // ─── Agents ─────────────────────────────────────────────────────────────────
 
 export const ADMIN_AGENTS: AdminAgent[] = [
+  // ── Managers ──────────────────────────────────────────────────────────────
   {
-    id: 'AG-HYD-001', name: 'Rajesh Sharma', phone: '+91 98765 43210',
-    email: 'rajesh@medireferral.in', city: 'Hyderabad', state: 'Telangana',
-    status: 'active', commissionRate: 4, totalLeads: 45, totalEarned: 230000,
-    thisMonth: 45230, pending: 8400, conversionRate: 68, joinedAt: '12 Jan 2024',
-    lastActive: 'Today', bank: 'HDFC ••••4521', upi: 'rajesh@hdfc',
-    specialties: ['Orthopaedics', 'Cardiology', 'Urology'],
+    id: 'MG-HYD-001', role: 'manager', name: 'Vikram Reddy', phone: '+91 99911 11111',
+    email: 'vikram.reddy@medireferral.in', city: 'Hyderabad', state: 'Telangana',
+    phoneVerified: true, status: 'active', commissionRate: 0, totalLeads: 0, totalEarned: 0,
+    thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '1 Jan 2024',
+    lastActive: 'Today', bank: 'HDFC ••••9900', upi: 'vikramr@hdfc',
+    specialties: ['Orthopaedics', 'Cardiology', 'Urology', 'General Surgery', 'Gastroenterology'],
   },
   {
-    id: 'AG-BLR-001', name: 'Preethi Nair', phone: '+91 97654 32109',
-    email: 'preethi.nair@gmail.com', city: 'Bangalore', state: 'Karnataka',
-    status: 'active', commissionRate: 3.5, totalLeads: 38, totalEarned: 185000,
-    thisMonth: 38400, pending: 6200, conversionRate: 72, joinedAt: '5 Feb 2024',
-    lastActive: 'Yesterday', bank: 'SBI ••••7832', upi: 'preethi@sbi',
-    specialties: ['Gynecology', 'General Surgery', 'ENT'],
+    id: 'MG-BLR-001', role: 'manager', name: 'Anitha Krishnan', phone: '+91 99922 22222',
+    email: 'anitha.k@medireferral.in', city: 'Bangalore', state: 'Karnataka',
+    phoneVerified: true, status: 'active', commissionRate: 0, totalLeads: 0, totalEarned: 0,
+    thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '1 Jan 2024',
+    lastActive: 'Today', bank: 'SBI ••••1122', upi: 'anithak@sbi',
+    specialties: ['Gynecology', 'General Surgery', 'ENT', 'Oncology', 'Cardiology'],
   },
-  {
-    id: 'AG-MUM-001', name: 'Amit Patel', phone: '+91 96543 21098',
-    email: 'amit.patel@referralnet.in', city: 'Mumbai', state: 'Maharashtra',
-    status: 'active', commissionRate: 4, totalLeads: 52, totalEarned: 312000,
-    thisMonth: 58200, pending: 11400, conversionRate: 75, joinedAt: '20 Jan 2024',
-    lastActive: 'Today', bank: 'ICICI ••••2341', upi: 'amit@icici',
-    specialties: ['Cardiology', 'Neurology', 'Orthopaedics'],
-  },
-  {
-    id: 'AG-DEL-001', name: 'Sunita Verma', phone: '+91 95432 10987',
-    email: 'sunita.verma@healthlink.in', city: 'Delhi', state: 'Delhi',
-    status: 'active', commissionRate: 3.75, totalLeads: 41, totalEarned: 198000,
-    thisMonth: 41800, pending: 7500, conversionRate: 66, joinedAt: '8 Mar 2024',
-    lastActive: '2 days ago', bank: 'Axis ••••9012', upi: 'sunita@axisbank',
-    specialties: ['Oncology', 'Cardiology', 'Pulmonology'],
-  },
-  {
-    id: 'AG-CHN-001', name: 'Karthik Raja', phone: '+91 94321 09876',
-    email: 'karthik.raja@medconnect.in', city: 'Chennai', state: 'Tamil Nadu',
-    status: 'active', commissionRate: 4, totalLeads: 29, totalEarned: 142000,
-    thisMonth: 29600, pending: 5100, conversionRate: 62, joinedAt: '15 Mar 2024',
-    lastActive: 'Today', bank: 'IOB ••••5567', upi: 'karthik@upi',
-    specialties: ['ENT', 'Ophthalmology', 'Dermatology'],
-  },
-  {
-    id: 'AG-PNE-001', name: 'Meera Joshi', phone: '+91 93210 98765',
-    email: 'meera.joshi@patientsbridge.in', city: 'Pune', state: 'Maharashtra',
-    status: 'active', commissionRate: 3.5, totalLeads: 23, totalEarned: 108000,
-    thisMonth: 22400, pending: 3800, conversionRate: 60, joinedAt: '2 Apr 2024',
-    lastActive: '3 days ago', bank: 'PNB ••••3345', upi: 'meera@pnb',
-    specialties: ['Urology', 'Nephrology'],
-  },
-  {
-    id: 'AG-HYD-002', name: 'Ravi Kumar', phone: '+91 92109 87654',
-    email: 'ravi.kumar@hyperefhyd.in', city: 'Hyderabad', state: 'Telangana',
-    status: 'active', commissionRate: 4, totalLeads: 34, totalEarned: 167000,
-    thisMonth: 34100, pending: 5900, conversionRate: 64, joinedAt: '10 Apr 2024',
-    lastActive: 'Yesterday', bank: 'HDFC ••••8823', upi: 'ravi.kumar@hdfc',
-    specialties: ['General Surgery', 'Gastroenterology'],
-  },
-  {
-    id: 'AG-BLR-002', name: 'Ananya Singh', phone: '+91 91098 76543',
-    email: 'ananya.s@gmail.com', city: 'Bangalore', state: 'Karnataka',
-    status: 'inactive', commissionRate: 3.5, totalLeads: 12, totalEarned: 48000,
-    thisMonth: 0, pending: 2400, conversionRate: 41, joinedAt: '22 Apr 2024',
-    lastActive: '14 days ago', bank: 'Kotak ••••1234', upi: 'ananya@kotak',
-    specialties: ['Gynecology'],
-  },
-  {
-    id: 'AG-MUM-002', name: 'Vikram Mehta', phone: '+91 90987 65432',
-    email: 'vikram.mehta@gmail.com', city: 'Mumbai', state: 'Maharashtra',
-    status: 'pending', commissionRate: 4, totalLeads: 0, totalEarned: 0,
-    thisMonth: 0, pending: 0, conversionRate: 0, joinedAt: '20 May 2024',
-    lastActive: 'Never', bank: 'HDFC ••••6789', upi: 'vikram@hdfc',
-    specialties: [],
-  },
-  {
-    id: 'AG-CHN-002', name: 'Deepa Nandakumar', phone: '+91 89876 54321',
-    email: 'deepa.n@medreferral.in', city: 'Chennai', state: 'Tamil Nadu',
-    status: 'suspended', commissionRate: 3.75, totalLeads: 18, totalEarned: 72000,
-    thisMonth: 0, pending: 0, conversionRate: 50, joinedAt: '1 Mar 2024',
-    lastActive: '30 days ago', bank: 'Canara ••••4456', upi: 'deepa@upi',
-    specialties: ['Oncology', 'Haematology'],
-  },
+  // ── Agents — MG-HYD-001 team (13 agents) ──────────────────────────────────
+  { id:'AG-HYD-001', role:'agent', name:'Rajesh Sharma',    phone:'+91 98765 43210', email:'rajesh@medireferral.in',    city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:45, totalEarned:230000, thisMonth:45230, pending:8400,  conversionRate:68, joinedAt:'12 Jan 2024', lastActive:'Today',        bank:'HDFC ••••4521',  upi:'rajesh@hdfc',     specialties:['Orthopaedics','Cardiology','Urology'],               managerId:'MG-HYD-001' },
+  { id:'AG-MUM-001', role:'agent', name:'Amit Patel',       phone:'+91 96543 21098', email:'amit.patel@referralnet.in', city:'Mumbai',    state:'Maharashtra',    phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:52, totalEarned:312000, thisMonth:58200, pending:11400, conversionRate:75, joinedAt:'20 Jan 2024', lastActive:'Today',        bank:'ICICI ••••2341', upi:'amit@icici',      specialties:['Cardiology','Neurology','Orthopaedics'],             managerId:'MG-HYD-001' },
+  { id:'AG-PNE-001', role:'agent', name:'Meera Joshi',      phone:'+91 93210 98765', email:'meera.joshi@patientsbridge.in', city:'Pune', state:'Maharashtra',    phoneVerified:true, status:'active',    commissionRate:3.5,  totalLeads:23, totalEarned:108000, thisMonth:22400, pending:3800,  conversionRate:60, joinedAt:'2 Apr 2024',  lastActive:'3 days ago',   bank:'PNB ••••3345',   upi:'meera@pnb',       specialties:['Urology','Nephrology'],                              managerId:'MG-HYD-001' },
+  { id:'AG-HYD-002', role:'agent', name:'Ravi Kumar',       phone:'+91 92109 87654', email:'ravi.kumar@hyperefhyd.in',  city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:34, totalEarned:167000, thisMonth:34100, pending:5900,  conversionRate:64, joinedAt:'10 Apr 2024', lastActive:'Yesterday',    bank:'HDFC ••••8823',  upi:'ravi.kumar@hdfc', specialties:['General Surgery','Gastroenterology'],                managerId:'MG-HYD-001' },
+  { id:'AG-MUM-002', role:'agent', name:'Vikram Mehta',     phone:'+91 90987 65432', email:'vikram.mehta@gmail.com',    city:'Mumbai',    state:'Maharashtra',    phoneVerified:true, status:'pending',   commissionRate:4,    totalLeads:0,  totalEarned:0,      thisMonth:0,     pending:0,     conversionRate:0,  joinedAt:'20 May 2024', lastActive:'Never',        bank:'HDFC ••••6789',  upi:'vikram@hdfc',     specialties:[],                                                    managerId:'MG-HYD-001' },
+  { id:'AG-HYD-003', role:'agent', name:'Srinivas Rao',     phone:'+91 98112 33445', email:'srinivas.r@medref.in',      city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:28, totalEarned:135000, thisMonth:28600, pending:4900,  conversionRate:61, joinedAt:'3 Feb 2024',  lastActive:'Today',        bank:'SBI ••••2211',   upi:'srinivas@sbi',    specialties:['Oncology','General Surgery'],                        managerId:'MG-HYD-001' },
+  { id:'AG-HYD-004', role:'agent', name:'Kavya Reddy',      phone:'+91 97334 55667', email:'kavya.r@healthnet.in',      city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:3.5,  totalLeads:19, totalEarned:89000,  thisMonth:18200, pending:3100,  conversionRate:58, joinedAt:'14 Feb 2024', lastActive:'Today',        bank:'HDFC ••••6677',  upi:'kavya@hdfc',      specialties:['Gynecology','ENT'],                                  managerId:'MG-HYD-001' },
+  { id:'AG-PNE-002', role:'agent', name:'Suresh Desai',     phone:'+91 96556 77889', email:'suresh.d@pune.in',          city:'Pune',      state:'Maharashtra',    phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:31, totalEarned:152000, thisMonth:31800, pending:5500,  conversionRate:65, joinedAt:'22 Feb 2024', lastActive:'Yesterday',    bank:'ICICI ••••3344', upi:'suresh@icici',    specialties:['Cardiology','Pulmonology'],                          managerId:'MG-HYD-001' },
+  { id:'AG-MUM-003', role:'agent', name:'Nisha Patil',      phone:'+91 95778 99001', email:'nisha.p@mum.in',            city:'Mumbai',    state:'Maharashtra',    phoneVerified:true, status:'active',    commissionRate:3.75, totalLeads:22, totalEarned:104000, thisMonth:21400, pending:3600,  conversionRate:59, joinedAt:'5 Mar 2024',  lastActive:'2 days ago',   bank:'Axis ••••5544',  upi:'nisha@axisbank',  specialties:['Ophthalmology','Dermatology'],                       managerId:'MG-HYD-001' },
+  { id:'AG-HYD-005', role:'agent', name:'Ramana Murthy',    phone:'+91 94990 11223', email:'ramana.m@hyd.in',           city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:37, totalEarned:179000, thisMonth:37600, pending:6400,  conversionRate:67, joinedAt:'18 Mar 2024', lastActive:'Today',        bank:'SBI ••••1199',   upi:'ramana@sbi',      specialties:['Neurology','Cardiology'],                            managerId:'MG-HYD-001' },
+  { id:'AG-PNE-003', role:'agent', name:'Priya Kulkarni',   phone:'+91 93112 33445', email:'priya.k@pne.in',            city:'Pune',      state:'Maharashtra',    phoneVerified:true, status:'inactive',  commissionRate:3.5,  totalLeads:9,  totalEarned:38000,  thisMonth:0,     pending:1800,  conversionRate:44, joinedAt:'1 Apr 2024',  lastActive:'10 days ago',  bank:'PNB ••••8877',   upi:'priya@pnb',       specialties:['Urology'],                                           managerId:'MG-HYD-001' },
+  { id:'AG-MUM-004', role:'agent', name:'Ajay Sharma',      phone:'+91 92334 55667', email:'ajay.s@mum.in',             city:'Mumbai',    state:'Maharashtra',    phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:26, totalEarned:124000, thisMonth:25800, pending:4400,  conversionRate:62, joinedAt:'12 Apr 2024', lastActive:'Today',        bank:'HDFC ••••4433',  upi:'ajay@hdfc',       specialties:['Gastroenterology','General Surgery'],                managerId:'MG-HYD-001' },
+  { id:'AG-HYD-006', role:'agent', name:'Divya Lakshmi',    phone:'+91 91556 77889', email:'divya.l@hyd.in',            city:'Hyderabad', state:'Telangana',      phoneVerified:true, status:'active',    commissionRate:3.75, totalLeads:17, totalEarned:81000,  thisMonth:16800, pending:2900,  conversionRate:56, joinedAt:'25 Apr 2024', lastActive:'Yesterday',    bank:'Canara ••••6655', upi:'divya@upi',      specialties:['ENT','Ophthalmology'],                               managerId:'MG-HYD-001' },
+
+  // ── Agents — MG-BLR-001 team (12 agents) ──────────────────────────────────
+  { id:'AG-BLR-001', role:'agent', name:'Preethi Nair',     phone:'+91 97654 32109', email:'preethi.nair@gmail.com',    city:'Bangalore', state:'Karnataka',      phoneVerified:true, status:'active',    commissionRate:3.5,  totalLeads:38, totalEarned:185000, thisMonth:38400, pending:6200,  conversionRate:72, joinedAt:'5 Feb 2024',  lastActive:'Yesterday',    bank:'SBI ••••7832',   upi:'preethi@sbi',     specialties:['Gynecology','General Surgery','ENT'],                managerId:'MG-BLR-001' },
+  { id:'AG-DEL-001', role:'agent', name:'Sunita Verma',     phone:'+91 95432 10987', email:'sunita.verma@healthlink.in',city:'Delhi',     state:'Delhi',          phoneVerified:true, status:'active',    commissionRate:3.75, totalLeads:41, totalEarned:198000, thisMonth:41800, pending:7500,  conversionRate:66, joinedAt:'8 Mar 2024',  lastActive:'2 days ago',   bank:'Axis ••••9012',  upi:'sunita@axisbank', specialties:['Oncology','Cardiology','Pulmonology'],               managerId:'MG-BLR-001' },
+  { id:'AG-CHN-001', role:'agent', name:'Karthik Raja',     phone:'+91 94321 09876', email:'karthik.raja@medconnect.in',city:'Chennai',   state:'Tamil Nadu',     phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:29, totalEarned:142000, thisMonth:29600, pending:5100,  conversionRate:62, joinedAt:'15 Mar 2024', lastActive:'Today',        bank:'IOB ••••5567',   upi:'karthik@upi',     specialties:['ENT','Ophthalmology','Dermatology'],                 managerId:'MG-BLR-001' },
+  { id:'AG-BLR-002', role:'agent', name:'Ananya Singh',     phone:'+91 91098 76543', email:'ananya.s@gmail.com',        city:'Bangalore', state:'Karnataka',      phoneVerified:true, status:'inactive',  commissionRate:3.5,  totalLeads:12, totalEarned:48000,  thisMonth:0,     pending:2400,  conversionRate:41, joinedAt:'22 Apr 2024', lastActive:'14 days ago',  bank:'Kotak ••••1234', upi:'ananya@kotak',    specialties:['Gynecology'],                                        managerId:'MG-BLR-001' },
+  { id:'AG-CHN-002', role:'agent', name:'Deepa Nandakumar', phone:'+91 89876 54321', email:'deepa.n@medreferral.in',    city:'Chennai',   state:'Tamil Nadu',     phoneVerified:true, status:'suspended', commissionRate:3.75, totalLeads:18, totalEarned:72000,  thisMonth:0,     pending:0,     conversionRate:50, joinedAt:'1 Mar 2024',  lastActive:'30 days ago',  bank:'Canara ••••4456',upi:'deepa@upi',       specialties:['Oncology','Haematology'],                            managerId:'MG-BLR-001' },
+  { id:'AG-BLR-003', role:'agent', name:'Harish Gowda',     phone:'+91 98223 44556', email:'harish.g@blr.in',           city:'Bangalore', state:'Karnataka',      phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:33, totalEarned:158000, thisMonth:33200, pending:5700,  conversionRate:63, joinedAt:'9 Feb 2024',  lastActive:'Today',        bank:'SBI ••••3344',   upi:'harish@sbi',      specialties:['Cardiology','Neurology'],                            managerId:'MG-BLR-001' },
+  { id:'AG-DEL-002', role:'agent', name:'Pooja Kapoor',     phone:'+91 97445 66778', email:'pooja.k@del.in',            city:'Delhi',     state:'Delhi',          phoneVerified:true, status:'active',    commissionRate:3.5,  totalLeads:25, totalEarned:118000, thisMonth:24600, pending:4200,  conversionRate:60, joinedAt:'19 Feb 2024', lastActive:'Yesterday',    bank:'HDFC ••••7788',  upi:'pooja@hdfc',      specialties:['Orthopedics','General Surgery'],                     managerId:'MG-BLR-001' },
+  { id:'AG-CHN-003', role:'agent', name:'Balaji Kumar',     phone:'+91 96667 88990', email:'balaji.k@chn.in',           city:'Chennai',   state:'Tamil Nadu',     phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:20, totalEarned:96000,  thisMonth:19800, pending:3400,  conversionRate:57, joinedAt:'3 Mar 2024',  lastActive:'Today',        bank:'IOB ••••5566',   upi:'balaji@upi',      specialties:['Urology','Gastroenterology'],                        managerId:'MG-BLR-001' },
+  { id:'AG-BLR-004', role:'agent', name:'Rekha Menon',      phone:'+91 95889 00112', email:'rekha.m@blr.in',            city:'Bangalore', state:'Karnataka',      phoneVerified:true, status:'active',    commissionRate:3.75, totalLeads:27, totalEarned:129000, thisMonth:26800, pending:4600,  conversionRate:61, joinedAt:'17 Mar 2024', lastActive:'2 days ago',   bank:'Kotak ••••9900', upi:'rekha@kotak',     specialties:['Gynecology','Pulmonology'],                          managerId:'MG-BLR-001' },
+  { id:'AG-DEL-003', role:'agent', name:'Rahul Gupta',      phone:'+91 94001 22334', email:'rahul.g@del.in',            city:'Delhi',     state:'Delhi',          phoneVerified:true, status:'active',    commissionRate:4,    totalLeads:36, totalEarned:172000, thisMonth:35900, pending:6100,  conversionRate:66, joinedAt:'28 Mar 2024', lastActive:'Today',        bank:'Axis ••••1100',  upi:'rahul@axisbank',  specialties:['Cardiology','Oncology'],                             managerId:'MG-BLR-001' },
+  { id:'AG-CHN-004', role:'agent', name:'Lakshmi Pillai',   phone:'+91 93122 33445', email:'lakshmi.p@chn.in',          city:'Chennai',   state:'Tamil Nadu',     phoneVerified:true, status:'pending',   commissionRate:3.5,  totalLeads:0,  totalEarned:0,      thisMonth:0,     pending:0,     conversionRate:0,  joinedAt:'10 May 2024', lastActive:'Never',        bank:'Canara ••••2233',upi:'lakshmi@upi',     specialties:['ENT','Dermatology'],                                 managerId:'MG-BLR-001' },
 ];
 
 // ─── Patients (cross-agent view) ─────────────────────────────────────────────
 
 export const ADMIN_PATIENTS: AdminPatient[] = [
-  { id: 101, name: 'Ramesh Kumar', phone: '+91 98765 43210', age: 45, gender: 'M', specialty: 'Orthopaedics', procedure: 'Knee Replacement', status: 'ipd_confirmed', commission: 4500, commPct: 3.75, packageCost: 120000, city: 'Hyderabad', hospital: 'Apollo Hospitals', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '10 May 2024' },
-  { id: 102, name: 'Priya Sharma', phone: '+91 97654 32109', age: 35, gender: 'F', specialty: 'Urology', procedure: 'Stone Removal', status: 'opd_scheduled', commission: 3900, commPct: 4.0, packageCost: 80000, city: 'Bangalore', hospital: 'Manipal Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '12 May 2024' },
-  { id: 103, name: 'Suresh Rao', phone: '+91 96543 21098', age: 52, gender: 'M', specialty: 'Cardiology', procedure: 'Angioplasty', status: 'new', commission: 8000, commPct: 4.0, packageCost: 200000, city: 'Chennai', hospital: null, agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '18 May 2024' },
-  { id: 104, name: 'Meena Devi', phone: '+91 95432 10987', age: 28, gender: 'F', specialty: 'Gynecology', procedure: 'Laparoscopy', status: 'contacted', commission: 2800, commPct: 4.0, packageCost: 70000, city: 'Mumbai', hospital: 'Kokilaben Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '20 May 2024' },
-  { id: 105, name: 'Vijay Patel', phone: '+91 94321 09876', age: 60, gender: 'M', specialty: 'General Surgery', procedure: 'Gallbladder Removal', status: 'completed', commission: 3200, commPct: 4.0, packageCost: 80000, city: 'Delhi', hospital: 'Fortis Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '22 Apr 2024' },
-  { id: 106, name: 'Kavitha Reddy', phone: '+91 93210 98765', age: 42, gender: 'F', specialty: 'ENT', procedure: 'Tonsillectomy', status: 'lost', commission: 1500, commPct: 4.0, packageCost: 35000, city: 'Hyderabad', hospital: null, agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '5 May 2024' },
-  { id: 107, name: 'Arjun Nair', phone: '+91 88765 43210', age: 38, gender: 'M', specialty: 'Cardiology', procedure: 'Bypass Surgery', status: 'ipd_confirmed', commission: 12000, commPct: 3.5, packageCost: 350000, city: 'Bangalore', hospital: 'Narayana Health', agentId: 'AG-BLR-001', agentName: 'Preethi Nair', createdAt: '8 May 2024' },
-  { id: 108, name: 'Lakshmi Iyer', phone: '+91 87654 32109', age: 55, gender: 'F', specialty: 'Gynecology', procedure: 'Hysterectomy', status: 'opd_scheduled', commission: 4900, commPct: 3.5, packageCost: 140000, city: 'Bangalore', hospital: 'Manipal Hospital', agentId: 'AG-BLR-001', agentName: 'Preethi Nair', createdAt: '14 May 2024' },
-  { id: 109, name: 'Mohammed Irfan', phone: '+91 86543 21098', age: 48, gender: 'M', specialty: 'Neurology', procedure: 'Brain Tumour Surgery', status: 'completed', commission: 18000, commPct: 4.0, packageCost: 450000, city: 'Mumbai', hospital: 'Kokilaben Hospital', agentId: 'AG-MUM-001', agentName: 'Amit Patel', createdAt: '2 Apr 2024' },
-  { id: 110, name: 'Seema Kapoor', phone: '+91 85432 10987', age: 32, gender: 'F', specialty: 'Orthopaedics', procedure: 'Hip Replacement', status: 'ipd_confirmed', commission: 6800, commPct: 4.0, packageCost: 170000, city: 'Delhi', hospital: 'Max Hospital', agentId: 'AG-DEL-001', agentName: 'Sunita Verma', createdAt: '10 May 2024' },
-  { id: 111, name: 'Ganesh Babu', phone: '+91 84321 09876', age: 65, gender: 'M', specialty: 'Cardiology', procedure: 'Valve Replacement', status: 'contacted', commission: 15000, commPct: 3.75, packageCost: 400000, city: 'Chennai', hospital: null, agentId: 'AG-CHN-001', agentName: 'Karthik Raja', createdAt: '15 May 2024' },
-  { id: 112, name: 'Pooja Menon', phone: '+91 83210 98765', age: 25, gender: 'F', specialty: 'ENT', procedure: 'Cochlear Implant', status: 'new', commission: 8500, commPct: 4.0, packageCost: 212000, city: 'Chennai', hospital: null, agentId: 'AG-CHN-001', agentName: 'Karthik Raja', createdAt: '19 May 2024' },
-  { id: 113, name: 'Santosh Desai', phone: '+91 82109 87654', age: 50, gender: 'M', specialty: 'Urology', procedure: 'Prostate Surgery', status: 'opd_scheduled', commission: 5200, commPct: 3.5, packageCost: 148000, city: 'Pune', hospital: 'Ruby Hall Clinic', agentId: 'AG-PNE-001', agentName: 'Meera Joshi', createdAt: '17 May 2024' },
-  { id: 114, name: 'Anita Rao', phone: '+91 81098 76543', age: 44, gender: 'F', specialty: 'General Surgery', procedure: 'Appendectomy', status: 'completed', commission: 2100, commPct: 4.0, packageCost: 52000, city: 'Hyderabad', hospital: 'Yashoda Hospital', agentId: 'AG-HYD-002', agentName: 'Ravi Kumar', createdAt: '5 Apr 2024' },
-  { id: 115, name: 'Rohit Malhotra', phone: '+91 80987 65432', age: 37, gender: 'M', specialty: 'Gastroenterology', procedure: 'Colonoscopy + Polypectomy', status: 'ipd_confirmed', commission: 3800, commPct: 4.0, packageCost: 95000, city: 'Hyderabad', hospital: 'KIMS Hospital', agentId: 'AG-HYD-002', agentName: 'Ravi Kumar', createdAt: '12 May 2024' },
+  { id: 101, name: 'Ramesh Kumar', phone: '+91 98765 43210', age: 45, gender: 'M', specialty: 'Orthopaedics', procedure: 'Knee Replacement', status: 'ipd_confirmed', commission: 4500, commPct: 3.75, packageCost: 120000, city: 'Hyderabad', hospital: 'Apollo Hospitals', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '01 Jun 2026', contactedAt: '2026-06-01T10:30:00', contactMethod: 'call', opdScheduledAt: '2026-06-08T09:00:00', opdToIpdAt: '2026-06-10T14:00:00', ipdConfirmedAt: '2026-06-10T16:30:00', conversionDays: 2 },
+  { id: 102, name: 'Priya Sharma', phone: '+91 97654 32109', age: 35, gender: 'F', specialty: 'Urology', procedure: 'Stone Removal', status: 'opd_scheduled', commission: 3900, commPct: 4.0, packageCost: 80000, city: 'Bangalore', hospital: 'Manipal Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '02 Jun 2026', contactedAt: '2026-06-02T09:15:00', contactMethod: 'whatsapp', opdScheduledAt: '2026-06-15T10:30:00' },
+  { id: 103, name: 'Suresh Rao', phone: '+91 96543 21098', age: 52, gender: 'M', specialty: 'Cardiology', procedure: 'Angioplasty', status: 'new', commission: 8000, commPct: 4.0, packageCost: 200000, city: 'Chennai', hospital: 'Apollo Chennai', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '18 May 2026' },
+  { id: 104, name: 'Meena Devi', phone: '+91 95432 10987', age: 28, gender: 'F', specialty: 'Gynecology', procedure: 'Laparoscopy', status: 'contacted', commission: 2800, commPct: 4.0, packageCost: 70000, city: 'Mumbai', hospital: 'Kokilaben Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '20 May 2026', contactedAt: '2026-05-21T11:45:00', contactMethod: 'call', opdScheduledAt: '2026-06-12T14:00:00' },
+  { id: 105, name: 'Vijay Patel', phone: '+91 94321 09876', age: 60, gender: 'M', specialty: 'General Surgery', procedure: 'Gallbladder Removal', status: 'completed', commission: 3200, commPct: 4.0, packageCost: 80000, city: 'Delhi', hospital: 'Fortis Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '22 Apr 2026', contactedAt: '2026-04-23T08:20:00', contactMethod: 'call', opdScheduledAt: '2026-04-28T11:00:00', opdToIpdAt: '2026-04-30T13:30:00', ipdConfirmedAt: '2026-04-30T14:45:00', completedAt: '2026-05-02T13:00:00', conversionDays: 2 },
+  { id: 106, name: 'Kavitha Reddy', phone: '+91 93210 98765', age: 42, gender: 'F', specialty: 'ENT', procedure: 'Tonsillectomy', status: 'lost', commission: 1500, commPct: 4.0, packageCost: 35000, city: 'Hyderabad', hospital: 'Yashoda Hospital', agentId: 'AG-HYD-001', agentName: 'Rajesh Sharma', createdAt: '5 May 2026' },
+  { id: 107, name: 'Arjun Nair', phone: '+91 88765 43210', age: 38, gender: 'M', specialty: 'Cardiology', procedure: 'Bypass Surgery', status: 'ipd_confirmed', commission: 12000, commPct: 3.5, packageCost: 350000, city: 'Bangalore', hospital: 'Narayana Health', agentId: 'AG-BLR-001', agentName: 'Preethi Nair', createdAt: '01 May 2026', contactedAt: '2026-05-02T10:00:00', contactMethod: 'call', opdScheduledAt: '2026-05-10T14:00:00', opdToIpdAt: '2026-05-13T15:45:00', ipdConfirmedAt: '2026-05-13T17:20:00', conversionDays: 3 },
+  { id: 108, name: 'Lakshmi Iyer', phone: '+91 87654 32109', age: 55, gender: 'F', specialty: 'Gynecology', procedure: 'Hysterectomy', status: 'opd_scheduled', commission: 4900, commPct: 3.5, packageCost: 140000, city: 'Bangalore', hospital: 'Manipal Hospital', agentId: 'AG-BLR-001', agentName: 'Preethi Nair', createdAt: '03 Jun 2026', contactedAt: '2026-06-04T14:20:00', contactMethod: 'whatsapp', opdScheduledAt: '2026-06-18T09:30:00' },
+  { id: 109, name: 'Mohammed Irfan', phone: '+91 86543 21098', age: 48, gender: 'M', specialty: 'Neurology', procedure: 'Brain Tumour Surgery', status: 'completed', commission: 18000, commPct: 4.0, packageCost: 450000, city: 'Mumbai', hospital: 'Kokilaben Hospital', agentId: 'AG-MUM-001', agentName: 'Amit Patel', createdAt: '2 Apr 2026', contactedAt: '2026-04-03T09:30:00', contactMethod: 'call', opdScheduledAt: '2026-04-10T10:00:00', opdToIpdAt: '2026-04-15T16:00:00', ipdConfirmedAt: '2026-04-15T17:30:00', completedAt: '2026-04-18T11:00:00', conversionDays: 5 },
+  { id: 110, name: 'Seema Kapoor', phone: '+91 85432 10987', age: 32, gender: 'F', specialty: 'Orthopaedics', procedure: 'Hip Replacement', status: 'ipd_confirmed', commission: 6800, commPct: 4.0, packageCost: 170000, city: 'Delhi', hospital: 'Max Hospital', agentId: 'AG-DEL-001', agentName: 'Sunita Verma', createdAt: '10 May 2026', contactedAt: '2026-05-11T11:00:00', contactMethod: 'whatsapp', opdScheduledAt: '2026-05-18T15:00:00', opdToIpdAt: '2026-05-25T12:15:00', ipdConfirmedAt: '2026-05-25T13:45:00', conversionDays: 7 },
+  { id: 111, name: 'Ganesh Babu', phone: '+91 84321 09876', age: 65, gender: 'M', specialty: 'Cardiology', procedure: 'Valve Replacement', status: 'contacted', commission: 15000, commPct: 3.75, packageCost: 400000, city: 'Chennai', hospital: 'Apollo Chennai', agentId: 'AG-CHN-001', agentName: 'Karthik Raja', createdAt: '15 May 2026', contactedAt: '2026-05-16T13:45:00', contactMethod: 'call', opdScheduledAt: '2026-06-20T10:30:00' },
+  { id: 112, name: 'Pooja Menon', phone: '+91 83210 98765', age: 25, gender: 'F', specialty: 'ENT', procedure: 'Cochlear Implant', status: 'new', commission: 8500, commPct: 4.0, packageCost: 212000, city: 'Chennai', hospital: 'Chennai Hospitals', agentId: 'AG-CHN-001', agentName: 'Karthik Raja', createdAt: '19 May 2026' },
+  { id: 113, name: 'Santosh Desai', phone: '+91 82109 87654', age: 50, gender: 'M', specialty: 'Urology', procedure: 'Prostate Surgery', status: 'opd_scheduled', commission: 5200, commPct: 3.5, packageCost: 148000, city: 'Pune', hospital: 'Ruby Hall Clinic', agentId: 'AG-PNE-001', agentName: 'Meera Joshi', createdAt: '17 May 2026', contactedAt: '2026-05-18T10:30:00', contactMethod: 'sms', opdScheduledAt: '2026-06-10T11:00:00' },
+  { id: 114, name: 'Anita Rao', phone: '+91 81098 76543', age: 44, gender: 'F', specialty: 'General Surgery', procedure: 'Appendectomy', status: 'completed', commission: 2100, commPct: 4.0, packageCost: 52000, city: 'Hyderabad', hospital: 'Yashoda Hospital', agentId: 'AG-HYD-002', agentName: 'Ravi Kumar', createdAt: '5 Apr 2026', contactedAt: '2026-04-06T09:00:00', contactMethod: 'call', opdScheduledAt: '2026-04-12T10:30:00', opdToIpdAt: '2026-04-14T11:30:00', ipdConfirmedAt: '2026-04-14T12:45:00', completedAt: '2026-04-16T10:00:00', conversionDays: 2 },
+  { id: 115, name: 'Rohit Malhotra', phone: '+91 80987 65432', age: 37, gender: 'M', specialty: 'Gastroenterology', procedure: 'Colonoscopy + Polypectomy', status: 'ipd_confirmed', commission: 3800, commPct: 4.0, packageCost: 95000, city: 'Hyderabad', hospital: 'KIMS Hospital', agentId: 'AG-HYD-002', agentName: 'Ravi Kumar', createdAt: '12 May 2026', contactedAt: '2026-05-13T15:20:00', contactMethod: 'whatsapp', opdScheduledAt: '2026-05-20T09:00:00', opdToIpdAt: '2026-05-25T10:45:00', ipdConfirmedAt: '2026-05-25T12:30:00', conversionDays: 5 },
 ];
 
 // ─── Commissions ────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ export default function Header() {
         <Link href="/notifications" className="relative w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
           <span className="text-lg">🔔</span>
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full text-white text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>
+            <span suppressHydrationWarning className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full text-white text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>
           )}
         </Link>
         <Link href="/admin"

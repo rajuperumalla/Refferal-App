@@ -36,6 +36,15 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
   String? _selectedBudget;
   String? _selectedUrgency;
 
+  static const _packageCosts = {
+    'Ortho': 120000.0, 'Cardiology': 200000.0, 'Urology': 80000.0, 'ENT': 35000.0,
+    'General Surgery': 80000.0, 'Gynecology': 70000.0, 'Neurology': 300000.0,
+    'Ophthalmology': 50000.0, 'Oncology': 250000.0, 'Proctology': 60000.0,
+  };
+
+  double _estimatedCommission(String specialty) =>
+      (_packageCosts[specialty] ?? 80000) * 0.04;
+
   final _specialties = [
     'Ortho', 'Urology', 'Proctology', 'Cardiology',
     'ENT', 'General Surgery', 'Gynecology', 'Ophthalmology',
@@ -468,6 +477,35 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+
+        // Estimated commission preview
+        if (_selectedSpecialty != null)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                const Text('💰', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Estimated commission for $_selectedSpecialty: '
+                    '₹${_estimatedCommission(_selectedSpecialty!).toStringAsFixed(0)} (~4%)',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         const SizedBox(height: 12),
 
         // Info card

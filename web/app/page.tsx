@@ -1,6 +1,21 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useStore } from '@/lib/store';
+import { UserRole } from '@/lib/admin-data';
+
+// Demo role detection by last 4 digits of phone
+function detectRole(phone: string): { role: UserRole; agentId: string } {
+  if (phone.endsWith('0000')) return { role: 'admin', agentId: 'ADMIN' };
+  if (phone.endsWith('1111')) return { role: 'manager', agentId: 'MG-HYD-001' };
+  return { role: 'agent', agentId: 'AG-HYD-001' };
+}
+
+const ROLE_REDIRECT: Record<UserRole, string> = {
+  admin:   '/admin',
+  manager: '/manager',
+  agent:   '/dashboard',
+};
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -8,10 +23,13 @@ export default function LoginPage() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { setCurrentUser } = useStore();
 
   const handleVerify = () => {
     setLoading(true);
-    setTimeout(() => router.push('/dashboard'), 1000);
+    const { role, agentId } = detectRole(phone);
+    setCurrentUser(agentId, role);
+    setTimeout(() => router.push(ROLE_REDIRECT[role]), 800);
   };
 
   const filledOtp = otp.join('');
@@ -99,13 +117,18 @@ export default function LoginPage() {
                 <p className="text-gray-500 text-sm mb-6">Sent to <strong className="text-gray-800">+91 {phone}</strong></p>
                 <div className="flex gap-2 mb-5">
                   {otp.map((v, i) => (
-                    <input key={i} id={`otp-${i}`} type="text" maxLength={1} value={v}
+                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" maxLength={1} value={v}
                       onChange={e => {
                         const val = e.target.value.replace(/\D/,'');
                         const next = [...otp]; next[i] = val; setOtp(next);
                         if (val && i < 5) (document.getElementById(`otp-${i+1}`) as HTMLInputElement)?.focus();
                       }}
-                      className="flex-1 h-14 border-2 border-gray-200 rounded-xl text-center text-xl font-bold focus:outline-none focus:border-blue-500 text-gray-900 transition-all"
+                      onKeyDown={e => {
+                        if (e.key === 'Backspace' && !otp[i] && i > 0) {
+                          (document.getElementById(`otp-${i-1}`) as HTMLInputElement)?.focus();
+                        }
+                      }}
+                      className="flex-1 min-w-0 w-0 aspect-square max-h-14 border-2 border-gray-200 rounded-xl text-center text-xl font-bold focus:outline-none focus:border-blue-500 text-gray-900 transition-all"
                     />
                   ))}
                 </div>
@@ -113,7 +136,12 @@ export default function LoginPage() {
                   className={`w-full h-12 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${filledOtp.length === 6 && !loading ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
                   {loading ? <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" /> : <>✅ Verify &amp; Login</>}
                 </button>
-                <div className="mt-4 p-3 bg-amber-50 rounded-xl text-amber-700 text-xs border border-amber-100">ℹ️ Demo: any 6-digit OTP works.</div>
+                <div className="mt-4 p-3 bg-amber-50 rounded-xl text-amber-700 text-xs border border-amber-100 space-y-1">
+                  <div className="font-semibold">Demo login (any 6-digit OTP):</div>
+                  <div>• Phone ending <strong>1111</strong> → Manager portal</div>
+                  <div>• Phone ending <strong>0000</strong> → Admin portal</div>
+                  <div>• Any other → Agent portal</div>
+                </div>
               </>
             )}
           </div>

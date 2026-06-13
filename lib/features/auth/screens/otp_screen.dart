@@ -53,9 +53,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       );
       return;
     }
-    final success = await ref.read(authProvider.notifier).verifyOtp(widget.phone, otp);
+    final success = await ref.read(authProvider.notifier).verifyOtp(otp);
     if (success && mounted) {
-      context.go('/home');
+      final user = ref.read(currentUserProvider);
+      final role = user?.role ?? 'agent';
+      context.go((role == 'manager' || role == 'admin') ? '/manager/home' : '/home');
     }
   }
 
@@ -257,28 +259,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 ),
 
               const Spacer(),
-
-              // Demo hint
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.accent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: AppColors.accent, size: 18),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Demo mode: Enter any 6-digit OTP (e.g. 123456)',
-                        style: TextStyle(fontSize: 12, color: AppColors.accent),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

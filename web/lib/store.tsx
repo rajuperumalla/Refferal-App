@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import {
   AdminAgent, AdminPatient, AdminCommission, AdminHospital, ActivityLog,
   ADMIN_AGENTS, ADMIN_PATIENTS, ADMIN_COMMISSIONS, ADMIN_HOSPITALS,
-  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate,
+  ADMIN_MONTHLY_REVENUE, ACTIVITY_LOG, MopType, calcExpectedPaymentDate, KYCRequest, UserRole,
 } from './admin-data';
 import { Notification } from './types';
 import { NOTIFICATIONS, MONTHLY_EARNINGS } from './data';
@@ -58,7 +58,7 @@ export interface BankVerificationRequest {
 
 export interface AdminNotification {
   id: number;
-  type: 'bank_verification' | 'new_agent' | 'alert';
+  type: 'bank_verification' | 'new_agent' | 'alert' | 'kyc';
   title: string;
   body: string;
   time: string;
@@ -73,12 +73,14 @@ interface AppState {
   patients: AdminPatient[];
   commissions: AdminCommission[];
   hospitals: AdminHospital[];
+  kycRequests: KYCRequest[];
   notifications: AgentNotification[];
   activityLog: ActivityLog[];
   monthlyRevenue: typeof ADMIN_MONTHLY_REVENUE;
   agentMonthlyEarnings: MonthlyEarning[];
   settings: AppSettings;
   currentAgentId: string;
+  currentRole: UserRole;
   bankDetails: BankDetails;
   bankVerificationRequests: BankVerificationRequest[];
   adminNotifications: AdminNotification[];
@@ -87,6 +89,7 @@ interface AppState {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 type Action =
+  | { type: 'SET_CURRENT_USER'; agentId: string; role: UserRole }
   | { type: 'ADD_PATIENT'; patient: AdminPatient; commission: AdminCommission; notification: AgentNotification; log: ActivityLog }
   | { type: 'APPROVE_COMMISSION'; id: number; notification: AgentNotification; log: ActivityLog }
   | { type: 'REJECT_COMMISSION'; id: number; reason: string; notification: AgentNotification; log: ActivityLog }
@@ -109,12 +112,22 @@ type Action =
   | { type: 'MARK_ADMIN_NOTIFICATION_READ'; id: number }
   | { type: 'UPDATE_PATIENT_STATUS'; patientId: number; status: string; notification: AgentNotification; log: ActivityLog; newCommission?: AdminCommission; approveCommissionId?: number }
   | { type: 'SET_MOP'; patientId: number; mop: MopType; ticketSize: number; implantCost: number; pharmacyCost: number; labCost: number; discount: number; otherDeductions: number; totalDeductions: number; shareableAmount: number; expectedPaymentDate: string; commissionId?: number; newCommissionAmount: number; notification: AgentNotification; log: ActivityLog }
-  | { type: 'VERIFY_EMAIL'; agentId: string; email: string };
+  | { type: 'SET_OPD_APPOINTMENT_DATE'; patientId: number; opdScheduledAt: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'SET_IPD_CONFIRMATION_DATE'; patientId: number; ipdConfirmedAt: string; conversionDays?: number; opdToIpdAt?: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'SET_COMPLETION_DATE'; patientId: number; completedAt: string; approveCommissionId?: number; notification: AgentNotification; log: ActivityLog }
+  | { type: 'VERIFY_EMAIL'; agentId: string; email: string }
+  | { type: 'VERIFY_PHONE'; agentId: string }
+  | { type: 'SUBMIT_KYC'; agentId: string; kycRequest: KYCRequest; adminNotif: AdminNotification; log: ActivityLog }
+  | { type: 'APPROVE_KYC'; kycId: number; agentId: string; notification: AgentNotification; log: ActivityLog }
+  | { type: 'REJECT_KYC'; kycId: number; agentId: string; reason: string; notification: AgentNotification; log: ActivityLog };
 
 function reducer(state: AppState, action: Action): AppState {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   switch (action.type) {
+    case 'SET_CURRENT_USER':
+      return { ...state, currentAgentId: action.agentId, currentRole: action.role };
+
     case 'ADD_PATIENT':
       return {
         ...state,
@@ -136,11 +149,19 @@ function reducer(state: AppState, action: Action): AppState {
             : c
         );
       }
+      const nowISO = new Date().toISOString();
       return {
         ...state,
-        patients: state.patients.map(p =>
-          p.id === action.patientId ? { ...p, status: action.status } : p
-        ),
+        patients: state.patients.map(p => {
+          if (p.id !== action.patientId) return p;
+          const updated: AdminPatient = { ...p, status: action.status };
+          // Auto-record contact timestamp the first time the team marks a lead "Contacted"
+          if (action.status === 'contacted' && !p.contactedAt) {
+            updated.contactedAt = nowISO;
+            if (!p.contactMethod) updated.contactMethod = 'call';
+          }
+          return updated;
+        }),
         commissions,
         notifications: [action.notification, ...state.notifications],
         activityLog: [action.log, ...state.activityLog],
@@ -203,6 +224,36 @@ function reducer(state: AppState, action: Action): AppState {
     case 'VERIFY_EMAIL':
       return { ...state, agents: state.agents.map(a => a.id === action.agentId ? { ...a, email: action.email, emailVerified: true } : a) };
 
+    case 'VERIFY_PHONE':
+      return { ...state, agents: state.agents.map(a => a.id === action.agentId ? { ...a, phoneVerified: true } : a) };
+
+    case 'SUBMIT_KYC':
+      return {
+        ...state,
+        kycRequests: [...state.kycRequests, action.kycRequest],
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'submitted' as const, kycSubmittedAt: today } : a),
+        adminNotifications: [action.adminNotif, ...state.adminNotifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'APPROVE_KYC':
+      return {
+        ...state,
+        kycRequests: state.kycRequests.map(k => k.id === action.kycId ? { ...k, status: 'approved' as const, reviewedAt: today } : k),
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'approved' as const, kycApprovedAt: today } : a),
+        notifications: [...state.notifications, action.notification],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'REJECT_KYC':
+      return {
+        ...state,
+        kycRequests: state.kycRequests.map(k => k.id === action.kycId ? { ...k, status: 'rejected' as const, rejectionReason: action.reason, reviewedAt: today } : k),
+        agents: state.agents.map(a => a.id === action.agentId ? { ...a, kycStatus: 'rejected' as const, kycRejectedReason: action.reason } : a),
+        notifications: [...state.notifications, action.notification],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
     case 'APPROVE_AGENT':
       return {
         ...state,
@@ -248,6 +299,51 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         patients: updatedPatients,
         commissions: updatedCommissions,
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+    }
+
+    case 'SET_OPD_APPOINTMENT_DATE':
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, opdScheduledAt: action.opdScheduledAt }
+            : p
+        ),
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'SET_IPD_CONFIRMATION_DATE':
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, ipdConfirmedAt: action.ipdConfirmedAt, conversionDays: action.conversionDays, opdToIpdAt: action.opdToIpdAt }
+            : p
+        ),
+        notifications: [action.notification, ...state.notifications],
+        activityLog: [action.log, ...state.activityLog],
+      };
+
+    case 'SET_COMPLETION_DATE': {
+      const completionCommissions = action.approveCommissionId !== undefined
+        ? state.commissions.map(c =>
+            c.id === action.approveCommissionId && c.status === 'pending_approval'
+              ? { ...c, status: 'approved' as const, approvedAt: today }
+              : c
+          )
+        : state.commissions;
+      return {
+        ...state,
+        patients: state.patients.map(p =>
+          p.id === action.patientId
+            ? { ...p, status: 'completed', completedAt: action.completedAt }
+            : p
+        ),
+        commissions: completionCommissions,
         notifications: [action.notification, ...state.notifications],
         activityLog: [action.log, ...state.activityLog],
       };
@@ -325,6 +421,7 @@ function reducer(state: AppState, action: Action): AppState {
 // ─── Initial state ─────────────────────────────────────────────────────────────
 
 const CURRENT_AGENT_ID = 'AG-HYD-001';
+const CURRENT_ROLE: UserRole = 'agent';
 
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'MediReferral',
@@ -354,12 +451,14 @@ const INITIAL_STATE: AppState = {
   patients: ADMIN_PATIENTS,
   commissions: ADMIN_COMMISSIONS,
   hospitals: ADMIN_HOSPITALS,
+  kycRequests: [],
   notifications: NOTIFICATIONS.map(n => ({ ...n, agentId: CURRENT_AGENT_ID })),
   activityLog: ACTIVITY_LOG,
   monthlyRevenue: ADMIN_MONTHLY_REVENUE,
   agentMonthlyEarnings: MONTHLY_EARNINGS,
   settings: DEFAULT_SETTINGS,
   currentAgentId: CURRENT_AGENT_ID,
+  currentRole: CURRENT_ROLE,
   bankDetails: DEFAULT_BANK_DETAILS,
   bankVerificationRequests: [],
   adminNotifications: [],
@@ -375,11 +474,18 @@ export interface StoreContextType extends AppState {
   unreadCount: number;
   myPendingAmount: number;
   myApprovedAmount: number;
+  kycRequests: KYCRequest[];
+  // Manager-scoped data
+  myTeamAgents: AdminAgent[];
+  myTeamPatients: AdminPatient[];
+  myTeamCommissions: AdminCommission[];
+  setCurrentUser(agentId: string, role: UserRole): void;
 
   addPatient(data: {
     name: string; phone: string; age: number; gender: 'M' | 'F';
     specialty: string; procedure: string; city: string;
     packageCost: number; hospital?: string | null; urgency?: string;
+    agentIdOverride?: string; // manager can submit on behalf of a specific agent
   }): void;
   approveCommission(id: number): void;
   rejectCommission(id: number, reason: string): void;
@@ -402,7 +508,14 @@ export interface StoreContextType extends AppState {
   markAdminNotificationRead(id: number): void;
   updatePatientStatus(patientId: number, newStatus: string): void;
   setMOP(patientId: number, mop: MopType, ticketSize: number, implantCost: number, pharmacyCost: number, labCost: number, discount: number, otherDeductions: number): void;
+  setOPDAppointmentDate(patientId: number, dateTime: string): void;
+  setIPDConfirmationDate(patientId: number, dateTime: string): void;
+  setCompletionDate(patientId: number, dateTime: string): void;
   verifyEmail(agentId: string, email: string): void;
+  verifyPhone(agentId: string): void;
+  submitKYC(agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string): void;
+  approveKYC(kycId: number, agentId: string): void;
+  rejectKYC(kycId: number, agentId: string, reason: string): void;
   adminUnreadCount: number;
 }
 
@@ -410,7 +523,7 @@ const StoreCtx = createContext<StoreContextType | null>(null);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-const LS_KEY = 'medireferral_store_v1';
+const LS_KEY = 'medireferral_store_v2';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE, (init) => {
@@ -437,9 +550,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     name: string; phone: string; age: number; gender: 'M' | 'F';
     specialty: string; procedure: string; city: string;
     packageCost: number; hospital?: string | null; urgency?: string;
+    agentIdOverride?: string;
   }) => {
     if (!currentAgent) return;
-    const commPct    = state.settings.commissionRates[data.specialty] ?? currentAgent.commissionRate;
+    // Manager can submit on behalf of a specific agent in their team
+    const targetAgent = data.agentIdOverride
+      ? (state.agents.find(a => a.id === data.agentIdOverride) ?? currentAgent)
+      : currentAgent;
+    const commPct    = state.settings.commissionRates[data.specialty] ?? targetAgent.commissionRate;
     const commission = Math.round(data.packageCost * commPct / 100);
     const patientId  = Math.max(0, ...state.patients.map(p => p.id)) + 1;
     const commId     = Math.max(0, ...state.commissions.map(c => c.id)) + 1;
@@ -451,22 +569,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         specialty: data.specialty, procedure: data.procedure, status: 'new',
         commission, commPct, packageCost: data.packageCost,
         city: data.city, hospital: data.hospital ?? null,
-        agentId: currentAgent.id, agentName: currentAgent.name, createdAt: today(),
+        agentId: targetAgent.id, agentName: targetAgent.name, createdAt: today(),
       },
       commission: {
-        id: commId, agentId: currentAgent.id, agentName: currentAgent.name,
+        id: commId, agentId: targetAgent.id, agentName: targetAgent.name,
         patientName: data.name, procedure: data.procedure || 'TBD',
         amount: commission, status: 'pending_approval', createdAt: today(),
       },
       notification: {
-        id: nextNotifId(), agentId: currentAgent.id, type: 'patient',
+        id: nextNotifId(), agentId: targetAgent.id, type: 'patient',
         title: 'Lead Submitted', body: `${data.name} — our team will contact them within 24h.`,
         time: 'Just now', read: false,
       },
       log: {
         id: nextLogId(), type: 'patient_added', title: 'Patient Lead Added',
-        detail: `${data.name} — ${data.specialty} via ${currentAgent.name}`,
-        time: 'Just now', actor: currentAgent.id,
+        detail: `${data.name} — ${data.specialty} via ${targetAgent.name}${data.agentIdOverride ? ` (added by ${currentAgent.name})` : ''}`,
+        time: 'Just now', actor: targetAgent.id,
       },
     });
   };
@@ -741,6 +859,87 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const setOPDAppointmentDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+    dispatch({
+      type: 'SET_OPD_APPOINTMENT_DATE',
+      patientId, opdScheduledAt: dateTime,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'appointment',
+        title: '📅 OPD Appointment Scheduled',
+        body: `Your OPD appointment for ${patient.name} has been scheduled. Please contact the hospital to confirm.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'opd_scheduled',
+        title: 'OPD Appointment Scheduled',
+        detail: `${patient.name} (${patient.agentName}) — ${new Date(dateTime).toLocaleString('en-IN')}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const setIPDConfirmationDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    // Calculate OPD→IPD conversion metrics if OPD was scheduled
+    let conversionDays: number | undefined;
+    let opdToIpdAt: string | undefined;
+
+    if (patient.opdScheduledAt) {
+      const opdDate = new Date(patient.opdScheduledAt);
+      const ipdDate = new Date(dateTime);
+      conversionDays = Math.max(0, Math.round((ipdDate.getTime() - opdDate.getTime()) / (1000 * 60 * 60 * 24)));
+      opdToIpdAt = new Date().toISOString(); // Conversion happens now
+    }
+
+    dispatch({
+      type: 'SET_IPD_CONFIRMATION_DATE',
+      patientId, ipdConfirmedAt: dateTime, conversionDays, opdToIpdAt,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'appointment',
+        title: '🏥 IPD Admission Confirmed',
+        body: `IPD admission confirmed for ${patient.name}. Please ensure all documents are ready.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'ipd_confirmed',
+        title: 'IPD Admission Confirmed',
+        detail: `${patient.name} (${patient.agentName}) — ${new Date(dateTime).toLocaleString('en-IN')}${conversionDays ? ` (${conversionDays} days from OPD)` : ''}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const setCompletionDate = (patientId: number, dateTime: string) => {
+    const patient = state.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    // Auto-approve any pending commission once the case is completed
+    const pending = state.commissions.find(
+      c => c.patientName === patient.name && c.agentId === patient.agentId && c.status === 'pending_approval'
+    );
+
+    dispatch({
+      type: 'SET_COMPLETION_DATE',
+      patientId, completedAt: dateTime, approveCommissionId: pending?.id,
+      notification: {
+        id: nextNotifId(), agentId: patient.agentId, type: 'patient',
+        title: '✅ Treatment Completed',
+        body: `${patient.name}'s treatment is marked completed. ${pending ? 'Your commission has been approved.' : ''} Set MOP to finalise payment.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: nextLogId(), type: 'patient_completed',
+        title: 'Treatment Completed',
+        detail: `${patient.name} (${patient.agentName}) — completed ${new Date(dateTime).toLocaleString('en-IN')}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   // ── Computed ──────────────────────────────────────────────────────────────────
 
   const myPatients        = state.patients.filter(p => p.agentId === state.currentAgentId);
@@ -748,21 +947,107 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const myNotifications   = state.notifications.filter(n => n.agentId === state.currentAgentId);
   const unreadCount       = myNotifications.filter(n => !n.read).length;
   const adminUnreadCount  = state.adminNotifications.filter(n => !n.read).length;
-  // Live pending & approved amounts — computed from actual commissions (not static agent field)
   const myPendingAmount   = myCommissions.filter(c => c.status === 'pending_approval').reduce((s, c) => s + c.amount, 0);
   const myApprovedAmount  = myCommissions.filter(c => c.status === 'approved').reduce((s, c) => s + c.amount, 0);
+
+  // Manager-scoped: agents belonging to this manager, and their patients/commissions
+  const myTeamAgents      = state.agents.filter(a => a.role === 'agent' && a.managerId === state.currentAgentId);
+  const teamAgentIds      = myTeamAgents.map(a => a.id);
+  const myTeamPatients    = state.patients.filter(p => teamAgentIds.includes(p.agentId));
+  const myTeamCommissions = state.commissions.filter(c => teamAgentIds.includes(c.agentId));
+
+  const setCurrentUser = (agentId: string, role: UserRole) =>
+    dispatch({ type: 'SET_CURRENT_USER', agentId, role });
 
   const verifyEmail = (agentId: string, email: string) =>
     dispatch({ type: 'VERIFY_EMAIL', agentId, email });
 
+  const verifyPhone = (agentId: string) =>
+    dispatch({ type: 'VERIFY_PHONE', agentId });
+
+  const submitKYC = (agentId: string, aadhaarNumber: string, panNumber: string, aadhaarDoc: string, panDoc: string, profilePhoto?: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    const kycId = Math.max(0, ...state.kycRequests.map(k => k.id)) + 1;
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Mask Aadhaar (show last 4) and PAN (show last 5)
+    const maskedAadhaar = `XXXX-XXXX-${aadhaarNumber.slice(-4)}`;
+    const maskedPAN     = `XXXXX${panNumber.slice(-5)}`;
+    dispatch({
+      type: 'SUBMIT_KYC',
+      agentId,
+      kycRequest: {
+        id: kycId, agentId, agentName: agent.name, phone: agent.phone,
+        submittedAt: today, status: 'pending',
+        aadhaarNumber: maskedAadhaar, panNumber: maskedPAN,
+        aadhaarDoc, panDoc, profilePhoto,
+      },
+      adminNotif: {
+        id: Date.now(), type: 'kyc', title: 'KYC Submitted',
+        body: `${agent.name} submitted KYC documents for verification`,
+        time: 'Just now', read: false, refId: kycId,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_submitted',
+        title: 'KYC Documents Submitted',
+        detail: `${agent.name} (${agentId}) submitted Aadhaar & PAN for KYC`,
+        time: 'Just now', actor: agent.name,
+      },
+    });
+  };
+
+  const approveKYC = (kycId: number, agentId: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    dispatch({
+      type: 'APPROVE_KYC', kycId, agentId,
+      notification: {
+        id: Date.now(), type: 'commission', agentId,
+        title: 'KYC Approved ✅',
+        body: 'Your KYC documents have been verified successfully. Your account is fully activated.',
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_approved',
+        title: 'KYC Approved',
+        detail: `KYC for ${agent.name} (${agentId}) approved`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
+  const rejectKYC = (kycId: number, agentId: string, reason: string) => {
+    const agent = state.agents.find(a => a.id === agentId);
+    if (!agent) return;
+    dispatch({
+      type: 'REJECT_KYC', kycId, agentId, reason,
+      notification: {
+        id: Date.now(), type: 'patient', agentId,
+        title: 'KYC Rejected ❌',
+        body: `Your KYC documents were rejected. Reason: ${reason}. Please resubmit.`,
+        time: 'Just now', read: false,
+      },
+      log: {
+        id: Date.now(), type: 'kyc_rejected',
+        title: 'KYC Rejected',
+        detail: `KYC for ${agent.name} (${agentId}) rejected — ${reason}`,
+        time: 'Just now', actor: 'Admin',
+      },
+    });
+  };
+
   return (
     <StoreCtx.Provider value={{
       ...state, currentAgent, myPatients, myCommissions, myNotifications, unreadCount, myPendingAmount, myApprovedAmount,
+      kycRequests: state.kycRequests,
+      myTeamAgents, myTeamPatients, myTeamCommissions, setCurrentUser,
       addPatient, approveCommission, rejectCommission, markCommissionPaid, approveAllCommissions,
       createAgent, updateAgent, approveAgent, suspendAgent, restoreAgent,
       addHospital, updateHospital, markNotificationRead, markAllNotificationsRead, updateSettings,
       updateBankDetails, submitBankVerification, approveBankVerification, rejectBankVerification,
-      markAdminNotificationRead, updatePatientStatus, setMOP, verifyEmail, adminUnreadCount,
+      markAdminNotificationRead, updatePatientStatus, setMOP, setOPDAppointmentDate, setIPDConfirmationDate, setCompletionDate,
+      verifyEmail, verifyPhone, submitKYC, approveKYC, rejectKYC,
+      adminUnreadCount,
     }}>
       {children}
     </StoreCtx.Provider>

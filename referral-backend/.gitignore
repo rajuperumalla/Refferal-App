@@ -1,0 +1,15 @@
+node_modules
+dist
+
+# Logs and local scratch files
+*.log
+test-integrations.js
+
+# Keep environment variables out of version control
+.env
+
+# Firebase service account credentials — NEVER commit
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
+/generated/prisma
