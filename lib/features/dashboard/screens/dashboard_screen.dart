@@ -3,15 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/network/dio_client.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../features/patients/models/patient_model.dart';
+import '../../../features/patients/providers/patients_provider.dart';
 import '../../../shared/widgets/stat_card.dart';
-
-final dashboardProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final data = await MockApiService.getDashboardData();
-  return data['data'] as Map<String, dynamic>;
-});
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -19,12 +15,12 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final dashboardAsync = ref.watch(dashboardProvider);
+    final patientsAsync = ref.watch(patientsStreamProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(dashboardProvider.future),
+        onRefresh: () async => ref.invalidate(patientsStreamProvider),
         child: CustomScrollView(
           slivers: [
             // App Bar
@@ -35,9 +31,7 @@ class DashboardScreen extends ConsumerWidget {
               backgroundColor: AppColors.primary,
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                  ),
+                  decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
                   child: SafeArea(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -51,7 +45,7 @@ class DashboardScreen extends ConsumerWidget {
                                 radius: 22,
                                 backgroundColor: Colors.white.withOpacity(0.2),
                                 child: Text(
-                                  user?.firstName[0].toUpperCase() ?? 'R',
+                                  user?.firstName[0].toUpperCase() ?? 'A',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -83,27 +77,9 @@ class DashboardScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
-                              // Notification bell
-                              Stack(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.notifications_outlined,
-                                        color: Colors.white),
-                                    onPressed: () => context.go('/notifications'),
-                                  ),
-                                  Positioned(
-                                    right: 8,
-                                    top: 8,
-                                    child: Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.accent,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              IconButton(
+                                icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                                onPressed: () => context.go('/notifications'),
                               ),
                             ],
                           ),
@@ -116,10 +92,10 @@ class DashboardScreen extends ConsumerWidget {
             ),
 
             SliverToBoxAdapter(
-              child: dashboardAsync.when(
+              child: patientsAsync.when(
                 loading: () => _buildShimmer(),
                 error: (e, _) => _buildError(ref),
-                data: (data) => _buildContent(context, data),
+                data: (patients) => _buildContent(context, patients),
               ),
             ),
           ],
@@ -129,24 +105,40 @@ class DashboardScreen extends ConsumerWidget {
         onPressed: () => context.push('/add-patient'),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Add Patient',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
+        label: const Text('Add Patient',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _buildContent(BuildContext context, Map<String, dynamic> data) {
-    final stats = data['stats'] as Map<String, dynamic>;
-    final activity = data['recent_activity'] as List<dynamic>;
+  Widget _buildContent(BuildContext context, List<PatientModel> patients) {
+    // Compute stats from real patient data
+    final active = patients.where(
+      (p) => p.status != PatientStatus.completed && p.status != PatientStatus.lost,
+    ).length;
+    final pendingSurgeries = patients.where((p) => p.status == PatientStatus.ipdConfirmed).length;
+    final completed = patients.where((p) => p.status == PatientStatus.completed).length;
+    final conversionRate = patients.isNotEmpty
+        ? ((completed / patients.length) * 100).toStringAsFixed(0)
+        : '0';
+    final avgCommission = patients.isNotEmpty
+        ? patients.map((p) => p.expectedCommission).reduce((a, b) => a + b) / patients.length
+        : 0.0;
+
+    // Contact tracking
+    final contacted = patients.where((p) => p.status != PatientStatus.newLead).length;
+    final opdToIpd = patients.where((p) =>
+      p.status == PatientStatus.ipdConfirmed || p.status == PatientStatus.completed).length;
+
+    // Recent patients (last 4)
+    final recent = patients.take(4).toList();
 
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Main earnings card
+          // ── Earnings Hero Card ──────────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -166,15 +158,12 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 Text(
                   'This Month\'s Earnings',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  AppFormatters.currency(stats['current_month_commission']),
-                  style: const TextStyle(
+                const Text(
+                  '₹0',
+                  style: TextStyle(
                     fontFamily: 'Poppins',
                     color: Colors.white,
                     fontSize: 32,
@@ -184,22 +173,11 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Expanded(
-                      child: _EarningsChip(
-                        label: 'Total Earned',
-                        value: AppFormatters.compactCurrency(
-                            stats['total_earnings']),
-                      ),
-                    ),
+                    Expanded(child: _EarningsChip(label: 'Total Earned', value: '₹0')),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: _EarningsChip(
-                        label: 'Pending',
-                        value:
-                            AppFormatters.currency(stats['pending_commission']),
-                        isWarning: true,
-                      ),
-                    ),
+                    Expanded(child: _EarningsChip(label: 'Pending', value: '₹0', isWarning: true)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _EarningsChip(label: 'Total Leads', value: '${patients.length}')),
                   ],
                 ),
               ],
@@ -208,16 +186,13 @@ class DashboardScreen extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Stats Grid
-          const Text(
-            'Quick Stats',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
+          // ── Quick Stats Grid ─────────────────────────────────────────────
+          const Text('Quick Stats',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 12),
           GridView.count(
             shrinkWrap: true,
@@ -229,25 +204,25 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               StatCard(
                 title: 'Active Patients',
-                value: '${stats['active_patients']}',
+                value: '$active',
                 icon: Icons.people_alt_outlined,
                 color: AppColors.primary,
               ),
               StatCard(
                 title: 'Pending Surgeries',
-                value: '${stats['pending_surgeries']}',
+                value: '$pendingSurgeries',
                 icon: Icons.medical_services_outlined,
                 color: AppColors.accent,
               ),
               StatCard(
                 title: 'Conversion Rate',
-                value: '${stats['conversion_rate']}%',
+                value: '$conversionRate%',
                 icon: Icons.trending_up_rounded,
                 color: AppColors.secondary,
               ),
               StatCard(
                 title: 'Avg Commission',
-                value: AppFormatters.compactCurrency(stats['avg_commission']),
+                value: AppFormatters.compactCurrency(avgCommission),
                 icon: Icons.account_balance_wallet_outlined,
                 color: AppColors.statusIPD,
               ),
@@ -256,27 +231,126 @@ class DashboardScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // Recent Activity
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '🔔 Recent Activity',
-                style: TextStyle(
+          // ── Contact Tracking Section ─────────────────────────────────────
+          const Text('📞 Contact Tracking',
+              style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ContactStatCard(
+                  icon: '☎️',
+                  label: 'Contacted',
+                  value: '$contacted',
+                  subtext: 'patients reached',
+                  color: const Color(0xFF0891B2),
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ContactStatCard(
+                  icon: '🔄',
+                  label: 'OPD→IPD',
+                  value: '$opdToIpd',
+                  subtext: 'conversion success',
+                  color: const Color(0xFF7C3AED),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ContactStatCard(
+                  icon: '✅',
+                  label: 'Completed',
+                  value: '$completed',
+                  subtext: 'cases closed',
+                  color: AppColors.secondary,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Recent Patients ───────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('👥 Recent Patients',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
               TextButton(
-                onPressed: () => context.go('/notifications'),
-                child: const Text('See all'),
+                onPressed: () => context.go('/patients'),
+                child: const Text('View all'),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          ...activity.map((a) => _ActivityItem(activity: a as Map<String, dynamic>)),
+          if (recent.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  const Text('No patients yet', style: TextStyle(color: AppColors.textSecondary)),
+                  TextButton(
+                    onPressed: () => context.push('/add-patient'),
+                    child: const Text('Add Patient →'),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: recent.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final p = entry.value;
+                  return Column(
+                    children: [
+                      ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
+                          child: Text(
+                            p.initials,
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(p.name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text('${p.specialty} · ${p.procedure}',
+                            style: const TextStyle(fontSize: 12)),
+                        trailing: _StatusBadge(status: p.status),
+                        onTap: () => context.push('/patient/${p.id}'),
+                      ),
+                      if (i < recent.length - 1)
+                        const Divider(height: 1, indent: 72),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+
           const SizedBox(height: 80),
         ],
       ),
@@ -291,7 +365,7 @@ class DashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: List.generate(
-            4,
+            5,
             (_) => Container(
               height: 80,
               margin: const EdgeInsets.only(bottom: 12),
@@ -314,13 +388,11 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             const Icon(Icons.wifi_off, size: 48, color: AppColors.textHint),
             const SizedBox(height: 16),
-            const Text(
-              'Unable to load dashboard',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            const Text('Unable to load dashboard',
+                style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => ref.refresh(dashboardProvider),
+              onPressed: () => ref.invalidate(patientsStreamProvider),
               child: const Text('Retry'),
             ),
           ],
@@ -335,16 +407,12 @@ class _EarningsChip extends StatelessWidget {
   final String value;
   final bool isWarning;
 
-  const _EarningsChip({
-    required this.label,
-    required this.value,
-    this.isWarning = false,
-  });
+  const _EarningsChip({required this.label, required this.value, this.isWarning = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(10),
@@ -353,118 +421,98 @@ class _EarningsChip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 11,
-            ),
-          ),
-          Text(
-            value,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: TextStyle(
-              color: isWarning ? AppColors.accentLight : Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
+          Text(label,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10)),
+          Text(value,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: TextStyle(
+                color: isWarning ? AppColors.accentLight : Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              )),
         ],
       ),
     );
   }
 }
 
-class _ActivityItem extends StatelessWidget {
-  final Map<String, dynamic> activity;
+class _ContactStatCard extends StatelessWidget {
+  final String icon;
+  final String label;
+  final String value;
+  final String subtext;
+  final Color color;
 
-  const _ActivityItem({required this.activity});
-
-  IconData get _icon {
-    switch (activity['type']) {
-      case 'surgery':
-        return Icons.local_hospital;
-      case 'opd':
-        return Icons.event_available;
-      case 'commission':
-        return Icons.currency_rupee;
-      case 'ipd':
-        return Icons.bed;
-      default:
-        return Icons.notifications;
-    }
-  }
-
-  Color get _color {
-    switch (activity['type']) {
-      case 'surgery':
-        return AppColors.statusCompleted;
-      case 'opd':
-        return AppColors.statusOPD;
-      case 'commission':
-        return AppColors.secondary;
-      case 'ipd':
-        return AppColors.statusIPD;
-      default:
-        return AppColors.primary;
-    }
-  }
+  const _ContactStatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.subtext,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(_icon, size: 18, color: _color),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+              Text(icon, style: const TextStyle(fontSize: 18)),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (activity['patient_name'] != null)
-                  Text(
-                    activity['patient_name'],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                Text(
-                  activity['event'],
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: activity['patient_name'] != null
-                        ? AppColors.textSecondary
-                        : AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            AppFormatters.timeAgo(activity['timestamp']),
-            style: const TextStyle(fontSize: 11, color: AppColors.textHint),
-          ),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+          const SizedBox(height: 2),
+          Text(subtext,
+              style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final PatientStatus status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: status.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: status.color.withOpacity(0.3)),
+      ),
+      child: Text(
+        status.label,
+        style: TextStyle(
+            color: status.color,
+            fontSize: 10,
+            fontWeight: FontWeight.w600),
       ),
     );
   }

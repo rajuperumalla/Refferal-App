@@ -1,14 +1,21 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/network/dio_client.dart';
+import '../../../core/services/firestore_service.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../models/patient_model.dart';
 
-// Patients State
+// ── Patients State ────────────────────────────────────────────────────────────
+
+/// 'recent' | 'name' | 'commission'
+typedef SortMode = String;
+
 class PatientsState {
   final List<PatientModel> patients;
   final bool isLoading;
   final String? error;
   final String statusFilter;
   final String searchQuery;
+  final SortMode sortMode;
 
   const PatientsState({
     this.patients = const [],
@@ -16,6 +23,7 @@ class PatientsState {
     this.error,
     this.statusFilter = 'all',
     this.searchQuery = '',
+    this.sortMode = 'recent',
   });
 
   PatientsState copyWith({
@@ -24,6 +32,7 @@ class PatientsState {
     String? error,
     String? statusFilter,
     String? searchQuery,
+    SortMode? sortMode,
   }) {
     return PatientsState(
       patients: patients ?? this.patients,
@@ -31,11 +40,12 @@ class PatientsState {
       error: error,
       statusFilter: statusFilter ?? this.statusFilter,
       searchQuery: searchQuery ?? this.searchQuery,
+      sortMode: sortMode ?? this.sortMode,
     );
   }
 
   List<PatientModel> get filteredPatients {
-    var list = patients;
+    var list = patients.toList();
 
     if (statusFilter != 'all') {
       list = list.where((p) => _matchesFilter(p.status, statusFilter)).toList();
@@ -49,6 +59,20 @@ class PatientsState {
               p.phone.contains(q) ||
               p.specialty.toLowerCase().contains(q))
           .toList();
+    }
+
+    // Apply sort
+    switch (sortMode) {
+      case 'name':
+        list.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case 'commission':
+        list.sort((a, b) => b.expectedCommission.compareTo(a.expectedCommission));
+        break;
+      case 'recent':
+      default:
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
     }
 
     return list;
@@ -74,16 +98,22 @@ class PatientsState {
   }
 }
 
-class PatientsNotifier extends StateNotifier<PatientsState> {
-  PatientsNotifier() : super(const PatientsState()) {
-    fetchPatients();
+// ── Patients Notifier ─────────────────────────────────────────────────────────
+
+class PatientsNotifier extends Notifier<PatientsState> {
+  @override
+  PatientsState build() {
+    Future.microtask(() => fetchPatients());
+    return const PatientsState();
   }
+
+  String get _agentId => ref.read(currentUserProvider)?.id ?? '';
 
   Future<void> fetchPatients() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final data = await MockApiService.getPatients();
-      final patients = data.map((j) => PatientModel.fromJson(j)).toList();
+      final data = await firestoreService.getPatients(_agentId);
+      final patients = data.map((j) => PatientModel.fromFirestore(j)).toList();
       state = state.copyWith(patients: patients, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -98,10 +128,23 @@ class PatientsNotifier extends StateNotifier<PatientsState> {
     state = state.copyWith(searchQuery: query);
   }
 
+  void setSortMode(SortMode mode) {
+    state = state.copyWith(sortMode: mode);
+  }
+
   Future<bool> addPatient(Map<String, dynamic> formData) async {
     try {
-      await Future.delayed(const Duration(seconds: 1));
-      // In real app, call API and refresh list
+      await firestoreService.addPatient({...formData, 'agentId': _agentId});
+      await fetchPatients();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updatePatientStatus(String patientId, String status) async {
+    try {
+      await firestoreService.updatePatient(patientId, {'status': status});
       await fetchPatients();
       return true;
     } catch (_) {
@@ -110,17 +153,37 @@ class PatientsNotifier extends StateNotifier<PatientsState> {
   }
 }
 
-final patientsProvider = StateNotifierProvider<PatientsNotifier, PatientsState>(
-  (ref) => PatientsNotifier(),
-);
+// ── Providers ─────────────────────────────────────────────────────────────────
 
-// Selected patient
-final selectedPatientProvider = StateProvider<PatientModel?>((ref) => null);
+final patientsProvider =
+    NotifierProvider<PatientsNotifier, PatientsState>(PatientsNotifier.new);
 
-// Patient timeline
-final patientTimelineProvider = FutureProvider.family<List<TimelineEvent>, PatientModel>(
+class _SelectedPatientNotifier extends Notifier<PatientModel?> {
+  @override
+  PatientModel? build() => null;
+  void select(PatientModel? p) => state = p;
+}
+
+final selectedPatientProvider =
+    NotifierProvider<_SelectedPatientNotifier, PatientModel?>(
+        _SelectedPatientNotifier.new);
+
+// Real-time stream provider (use when you need live updates)
+final patientsStreamProvider =
+    StreamProvider.autoDispose<List<PatientModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return Stream.value([]);
+
+  return firestoreService.patientsStream(user.id).map(
+        (list) => list.map((j) => PatientModel.fromFirestore(j)).toList(),
+      );
+});
+
+// Patient timeline (derived from patient data, no extra Firestore call needed)
+final patientTimelineProvider =
+    FutureProvider.family<List<TimelineEvent>, PatientModel>(
   (ref, patient) async {
-    await Future.delayed(const Duration(milliseconds: 400));
+    await Future.delayed(const Duration(milliseconds: 200));
     return _buildTimeline(patient);
   },
 );
@@ -157,7 +220,8 @@ List<TimelineEvent> _buildTimeline(PatientModel p) {
     events.add(TimelineEvent(
       date: p.opdDate ?? '',
       title: 'OPD Scheduled',
-      description: p.hospital != null ? '${p.hospital}, 10:00 AM' : 'Hospital TBD',
+      description:
+          p.hospital != null ? '${p.hospital}, 10:00 AM' : 'Hospital TBD',
       isCompleted: currentIndex >= 2,
       isPending: currentIndex < 2,
     ));
@@ -173,7 +237,8 @@ List<TimelineEvent> _buildTimeline(PatientModel p) {
     events.add(TimelineEvent(
       date: '',
       title: 'IPD Confirmed',
-      description: p.surgeryDate != null ? 'Surgery: ${p.surgeryDate}' : '',
+      description:
+          p.surgeryDate != null ? 'Surgery: ${p.surgeryDate}' : '',
       isCompleted: true,
     ));
   }
@@ -200,7 +265,8 @@ List<TimelineEvent> _buildTimeline(PatientModel p) {
     date: '',
     title: 'Commission Payment',
     description: '',
-    isCompleted: p.status == PatientStatus.completed && p.actualCommission != null,
+    isCompleted:
+        p.status == PatientStatus.completed && p.actualCommission != null,
     isPending: true,
   ));
 

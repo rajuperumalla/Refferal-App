@@ -109,12 +109,12 @@ export default function SettingsPage() {
             <div className="flex gap-4">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">Minimum</label>
-                <input type="number" step="0.25" min="0" max="10" value={minCommission} onChange={e => setMinCommission(parseFloat(e.target.value))}
+                <input type="number" step="0.25" min="0" max="28" value={minCommission} onChange={e => setMinCommission(parseFloat(e.target.value))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 mb-1">Maximum</label>
-                <input type="number" step="0.25" min="0" max="10" value={maxCommission} onChange={e => setMaxCommission(parseFloat(e.target.value))}
+                <input type="number" step="0.25" min="0" max="28" value={maxCommission} onChange={e => setMaxCommission(parseFloat(e.target.value))}
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
@@ -156,7 +156,7 @@ export default function SettingsPage() {
                 <div key={specialty} className="flex items-center gap-2">
                   <span className="text-xs text-gray-600 flex-1 truncate">{specialty}</span>
                   <div className="flex items-center gap-1">
-                    <input type="number" step="0.25" min="0" max="10" value={rate}
+                    <input type="number" step="0.25" min="0" max="28" value={rate}
                       onChange={e => setRates(r => ({ ...r, [specialty]: parseFloat(e.target.value) }))}
                       className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                     <span className="text-xs text-gray-400">%</span>

@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Roles ────────────────────────────────────────────────────────────────────
+enum Role {
+  AGENT
+  MANAGER
+  ADMIN
+}
+
+// ── Users (Agent, Manager, Admin) ────────────────────────────────────────────
+model User {
+  id             String       @id @default(uuid())
+  phone          String       @unique
+  email          String?      @unique
+  name           String
+  role           Role         @default(AGENT)
+  agentId        String       @unique // E.g., AG001, MG001
+  commissionRate Float        @default(4.0)
+  profileImage   String?
+  city           String?
+  bankAccountNo  String?
+  bankIfsc       String?
+  
+  // Self-referencing relationship for Manager hierarchy
+  managerId      String?
+  manager        User?        @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  agents         User[]       @relation("TeamManager")
+
+  patients       Patient[]
+  commissions    Commission[]
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("users")
+}
+
+// ── Urgency ──────────────────────────────────────────────────────────────────
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ── Patient Status ───────────────────────────────────────────────────────────
+enum PatientStatus {
+  NEW
+  CONTACTED
+  OPD
+  IPD
+  COMPLETED
+  LOST
+}
+
+// ── Patients (Leads) ─────────────────────────────────────────────────────────
+model Patient {
+  id               String            @id @default(uuid())
+  agentId          String
+  agent            User              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  fullName         String
+  age              Int
+  gender           String
+  specialty        String
+  procedure        String
+  city             String
+  urgency          Urgency           @default(MEDIUM)
+  status           PatientStatus     @default(NEW)
+  estimatedBudget  Decimal?          @db.Decimal(12, 2)
+  hasInsurance     Boolean           @default(false)
+  hospital         String?
+  opdDate          DateTime?
+  surgeryDate      DateTime?
+  actualCommission Decimal?          @db.Decimal(12, 2)
+  
+  timeline         PatientTimeline[]
+  documents        PatientDocument[]
+  commissions      Commission[]
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@map("patients")
+}
+
+// ── Patient Timeline Events ──────────────────────────────────────────────────
+model PatientTimeline {
+  id          String        @id @default(uuid())
+  patientId   String
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  status      PatientStatus
+  description String
+  updatedBy   String        // ID of user who changed status
+  createdAt   DateTime      @default(now())
+
+  @@map("patient_timelines")
+}
+
+// ── Document Type ────────────────────────────────────────────────────────────
+enum DocType {
+  BILL
+  PRESCRIPTION
+  LAB_REPORT
+  OTHER
+}
+
+// ── OCR Extraction Status ────────────────────────────────────────────────────
+enum OcrStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+// ── Patient Documents (Private Medical/Billing Files) ────────────────────────
+model PatientDocument {
+  id               String    @id @default(uuid())
+  patientId        String
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  fileName         String
+  storagePath      String    // Firebase Storage storage path reference
+  docType          DocType   @default(OTHER)
+  ocrStatus        OcrStatus @default(PENDING)
+  ocrExtractedData Json?     // JSON block containing key fields parsed from files
+
+  createdAt        DateTime  @default(now())
+
+  @@map("patient_documents")
+}
+
+// ── Commission Status ────────────────────────────────────────────────────────
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+// ── Commissions Ledger ───────────────────────────────────────────────────────
+model Commission {
+  id         String           @id @default(uuid())
+  patientId  String
+  patient    Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  agentId    String
+  agent      User             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  amount     Decimal          @db.Decimal(12, 2)
+  status     CommissionStatus @default(PENDING)
+  utrNumber  String?          // Unique Transaction Reference for payout confirmation
+  
+  approvedAt DateTime?
+  paidAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@map("commissions")
+}

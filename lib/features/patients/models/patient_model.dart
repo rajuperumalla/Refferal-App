@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -161,6 +162,70 @@ class PatientModel {
       createdAt: json['created_at'] ?? DateTime.now().toIso8601String(),
       lastUpdated: json['last_updated'] ?? DateTime.now().toIso8601String(),
     );
+  }
+
+  // Firestore uses camelCase field names and Timestamp for dates
+  factory PatientModel.fromFirestore(Map<String, dynamic> data) {
+    String _tsToString(dynamic ts) {
+      if (ts == null) return '';
+      if (ts is Timestamp) return ts.toDate().toIso8601String();
+      return ts.toString();
+    }
+
+    return PatientModel(
+      id: data['id'].hashCode,
+      name: data['name'] ?? '',
+      phone: data['phone'] ?? '',
+      age: data['age'] ?? 0,
+      gender: data['gender'] ?? 'M',
+      specialty: data['specialty'] ?? '',
+      procedure: data['procedure'] ?? '',
+      status: PatientStatus.fromString(data['status'] ?? 'new'),
+      expectedCommission: (data['expectedCommission'] ?? 0).toDouble(),
+      actualCommission: data['actualCommission']?.toDouble(),
+      surgeryDate: data['surgeryDate'],
+      opdDate: data['opdDate'],
+      dischargeDate: data['dischargeDate'],
+      city: data['city'] ?? '',
+      hospital: data['hospital'],
+      doctor: data['doctor'],
+      packageCost: (data['packageCost'] ?? 0).toDouble(),
+      commissionPercent: (data['commissionPercent'] ?? 4.0).toDouble(),
+      insurance: data['insurance'] ?? false,
+      insuranceProvider: data['insuranceProvider'],
+      budgetRange: data['budgetRange'],
+      urgency: data['urgency'],
+      notes: data['notes'],
+      createdAt: _tsToString(data['createdAt']),
+      lastUpdated: _tsToString(data['lastUpdated']),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'phone': phone,
+      'age': age,
+      'gender': gender,
+      'specialty': specialty,
+      'procedure': procedure,
+      'status': status.name,
+      'expectedCommission': expectedCommission,
+      if (actualCommission != null) 'actualCommission': actualCommission,
+      if (surgeryDate != null) 'surgeryDate': surgeryDate,
+      if (opdDate != null) 'opdDate': opdDate,
+      if (dischargeDate != null) 'dischargeDate': dischargeDate,
+      'city': city,
+      if (hospital != null) 'hospital': hospital,
+      if (doctor != null) 'doctor': doctor,
+      'packageCost': packageCost,
+      'commissionPercent': commissionPercent,
+      'insurance': insurance,
+      if (insuranceProvider != null) 'insuranceProvider': insuranceProvider,
+      if (budgetRange != null) 'budgetRange': budgetRange,
+      if (urgency != null) 'urgency': urgency,
+      if (notes != null) 'notes': notes,
+    };
   }
 
   String get genderLabel => gender == 'M' ? 'Male' : gender == 'F' ? 'Female' : 'Other';

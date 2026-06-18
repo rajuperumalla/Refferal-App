@@ -7,7 +7,7 @@ const fmt  = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 const fmtL = (n: number) => n >= 100000 ? `₹${(n/100000).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(0)}K` : `₹${n}`;
 
 export default function DashboardPage() {
-  const { currentAgent, myPatients, myNotifications, agentMonthlyEarnings } = useStore();
+  const { currentAgent, myPatients, myNotifications, agentMonthlyEarnings, myPendingAmount, myApprovedAmount } = useStore();
   const agent = currentAgent;
 
   const thisMonth = agentMonthlyEarnings[agentMonthlyEarnings.length - 1]?.amount ?? 0;
@@ -16,11 +16,28 @@ export default function DashboardPage() {
   const maxBar    = Math.max(...agentMonthlyEarnings.map(m => m.amount), 1);
   const unread    = myNotifications.filter(n => !n.read).length;
 
+  // Contact tracking metrics
+  const contactedPatients = myPatients.filter(p => p.contactedAt).length;
+  const opdToIpdConversions = myPatients.filter(p => p.opdToIpdAt).length;
+  const avgConversionDays = opdToIpdConversions > 0
+    ? Math.round(myPatients.filter(p => p.conversionDays).reduce((a, p) => a + (p.conversionDays || 0), 0) / opdToIpdConversions)
+    : 0;
+  const contactMethods = myPatients.reduce((acc, p) => {
+    if (p.contactMethod) acc[p.contactMethod] = (acc[p.contactMethod] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   const stats = [
     { icon: '👥', label: 'Active Patients',    value: myPatients.filter(p => !['completed','lost'].includes(p.status)).length.toString(), color: '#2563EB', bg: '#EFF6FF' },
     { icon: '🏥', label: 'Pending Surgeries',  value: myPatients.filter(p => p.status === 'ipd_confirmed').length.toString(),            color: '#D97706', bg: '#FFFBEB' },
     { icon: '📈', label: 'Conversion Rate',    value: `${agent?.conversionRate ?? 0}%`,                                                  color: '#10B981', bg: '#ECFDF5' },
     { icon: '💵', label: 'Avg Commission',      value: myPatients.length > 0 ? fmtL(Math.round(myPatients.reduce((a,p) => a + p.commission, 0) / myPatients.length)) : '₹0', color: '#8B5CF6', bg: '#F5F3FF' },
+  ];
+
+  const contactStats = [
+    { icon: '☎️', label: 'Contacted',           value: contactedPatients.toString(), color: '#0891B2', bg: '#ECFDF5', subtext: 'patients reached' },
+    { icon: '🔄', label: 'OPD→IPD Converted',   value: opdToIpdConversions.toString(), color: '#7C3AED', bg: '#F5F3FF', subtext: 'conversion success' },
+    { icon: '⏱️', label: 'Avg Conversion Time', value: `${avgConversionDays} days`, color: '#EA580C', bg: '#FFFBEB', subtext: 'from contact to IPD' },
   ];
 
   const recentActivity = myNotifications.slice(0, 4).map(n => ({
@@ -50,7 +67,10 @@ export default function DashboardPage() {
             </div>
             <div className="bg-white/15 rounded-xl px-4 py-3">
               <div className="text-white/60 text-xs mb-1">Pending</div>
-              <div className="text-xl font-bold">{fmt(agent?.pending ?? 0)}</div>
+              <div className="text-xl font-bold">{fmt(myPendingAmount)}</div>
+              {myApprovedAmount > 0 && (
+                <div className="text-[10px] text-emerald-300 mt-0.5">+ {fmt(myApprovedAmount)} approved</div>
+              )}
             </div>
             <div className="bg-white/15 rounded-xl px-4 py-3">
               <div className="text-white/60 text-xs mb-1">Total Leads</div>
@@ -87,6 +107,40 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Contact Tracking Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {contactStats.map(s => (
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="text-sm text-gray-500 mb-1">{s.label}</div>
+                <div className="text-3xl font-bold text-gray-900">{s.value}</div>
+              </div>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: s.bg }}>{s.icon}</div>
+            </div>
+            <div className="text-xs text-gray-400">{s.subtext}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Contact Methods Breakdown */}
+      {Object.keys(contactMethods).length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="font-semibold text-gray-900 mb-4">📞 Contact Methods Used</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Object.entries(contactMethods).map(([method, count]) => (
+              <div key={method} className="p-4 bg-gray-50 rounded-xl text-center hover:bg-gray-100 transition-colors">
+                <div className="text-2xl mb-2">
+                  {method === 'call' ? '☎️' : method === 'whatsapp' ? '💬' : method === 'sms' ? '📱' : '📧'}
+                </div>
+                <div className="text-lg font-bold text-gray-900">{count}</div>
+                <div className="text-xs text-gray-500 capitalize mt-1">{method}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
